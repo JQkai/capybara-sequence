@@ -11,6 +11,14 @@ npm test         # 題目產生器的單元測試
 npm run build    # 型別檢查＋打包到 apps/web/dist
 ```
 
+## 部署
+
+推上 `main` 時，GitHub Actions（`.github/workflows/deploy.yml`）會跑測試、打包，再把 `apps/web/dist` 部署到 GitHub Pages：
+https://jqkai.github.io/capybara-sequence/
+
+第一次使用前要在 repo 的 **Settings → Pages → Build and deployment → Source** 選「GitHub Actions」。
+免費帳號只有公開的 repo 能用 GitHub Pages；網站本身一律是公開的。
+
 ## 專案結構
 
 ```
