@@ -16,6 +16,9 @@
   --correct-soft: #dff2e6;
   --wrong: #d9573f;
   --wrong-soft: #fde3dc;
+  /* 天才版的標示色 */
+  --genius: #7b5cc4;
+  --genius-soft: #ece6f8;
   --border: #ead9c4;
   --radius: 18px;
   --shadow: 0 3px 0 rgba(58, 42, 28, 0.12);

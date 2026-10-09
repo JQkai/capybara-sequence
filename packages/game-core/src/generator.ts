@@ -1,16 +1,18 @@
 import { pick, randomInt, shuffle, type Rng } from './rng';
-import type { Level, Question, QuestionType, StepRule } from './types';
+import type { Level, Mode, Question, QuestionType, StepRule } from './types';
 
 /** 列出所有合法的第一個數，讓整個數列都落在規則範圍內並符合限制 */
 export function startCandidates(rule: StepRule, length: number): number[] {
   if (rule.step === 0 || !Number.isInteger(rule.step)) {
     throw new Error(`step 必須是不為 0 的整數：${rule.step}`);
   }
-  const span = (length - 1) * Math.abs(rule.step);
+  const size = Math.abs(rule.step);
+  const span = (length - 1) * size;
   const [lo, hi] = rule.step > 0 ? [rule.min, rule.max - span] : [rule.min + span, rule.max];
   const result: number[] = [];
   for (let start = lo; start <= hi; start++) {
-    if (rule.startMultiple && start % Math.abs(rule.step) !== 0) continue;
+    if (rule.startMultiple && start % size !== 0) continue;
+    if (rule.offStart && start % size === 0) continue;
     if (rule.crossEvery) {
       const end = start + (length - 1) * rule.step;
       const lower = Math.min(start, end);
@@ -22,23 +24,99 @@ export function startCandidates(rule: StepRule, length: number): number[] {
   return result;
 }
 
+/** 困難、天才版的數列長度：優先 8 個數，有規則排不下就用 7 個 */
+const HARD_LENGTHS = [8, 7];
+/** 空格數：困難版 2～3 個；天才版一律 3 個，讓「跨過整百」、乘法這類變化本來就多的關卡也比困難版難 */
+export const BLANK_COUNTS: Record<'hard' | 'genius', { min: number; max: number }> = {
+  hard: { min: 2, max: 3 },
+  genius: { min: 3, max: 3 },
+};
+
+function feasible(rule: StepRule, length: number): boolean {
+  return startCandidates(rule, length).length > 0;
+}
+
+/**
+ * 天才版的變化：在困難版的規則上混合「不從倍數開始」「跨過整十、整百」「往回數」。
+ * - 不從倍數開始：只用在 2、5、10、100 個一數；乘法數列不用，否則就不是那一段乘法了
+ * - 往回數：只用在二年級（課綱 N-2-1「從某數開始前後數數」）
+ * 原本的規則也留著一起混合出題，數列才不會太單調。
+ */
+function geniusRules(level: Level, base: StepRule, length: number): StepRule[] {
+  const size = Math.abs(base.step);
+  const crossEvery = size < 10 ? 10 : size < 100 ? 100 : undefined;
+  const offs = base.startMultiple && !base.times ? [false, true] : [false];
+  const descs = level.grade === 2 && base.step > 0 ? [false, true] : [false];
+  const crosses = crossEvery && !base.crossEvery ? [false, true] : [false];
+
+  const variants: StepRule[] = [];
+  for (const off of offs) {
+    for (const desc of descs) {
+      for (const cross of crosses) {
+        const rule: StepRule = { ...base, step: desc ? -base.step : base.step };
+        if (off) {
+          delete rule.startMultiple;
+          rule.offStart = true;
+        }
+        if (cross) rule.crossEvery = crossEvery;
+        if (feasible(rule, length)) variants.push(rule);
+      }
+    }
+  }
+  return variants;
+}
+
+function uniqueRules(rules: StepRule[]): StepRule[] {
+  const seen = new Set<string>();
+  return rules.filter((rule) => {
+    const key = JSON.stringify(rule, Object.keys(rule).sort());
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export interface ModeSettings {
+  rules: StepRule[];
+  length: number;
+  types: QuestionType[];
+}
+
+/** 某個關卡在某個難度下的出題設定 */
+export function settingsFor(level: Level, mode: Mode): ModeSettings {
+  if (mode === 'easy') return { rules: level.rules, length: level.length, types: level.types };
+  const hardRules = level.hard?.rules ?? level.rules;
+  const length =
+    level.hard?.length ??
+    HARD_LENGTHS.find((n) => hardRules.every((rule) => feasible(rule, n))) ??
+    HARD_LENGTHS.at(-1)!;
+  const rules =
+    mode === 'hard' ? hardRules : uniqueRules(hardRules.flatMap((rule) => geniusRules(level, rule, length)));
+  // 多個空格的選擇題不好操作，困難、天才版只出補空格
+  return { rules, length, types: ['fill'] };
+}
+
 /** 關卡設定有沒有出不了題的規則；有的話丟出錯誤 */
 export function validateLevel(level: Level): void {
   if (level.length < 4) throw new Error(`${level.id}：數列至少要 4 個數，空格以外才有 3 個數可以看出規律`);
   if (level.types.length === 0) throw new Error(`${level.id}：沒有設定題型`);
   if (level.choiceCount < 2) throw new Error(`${level.id}：選項至少要 2 個`);
-  for (const rule of level.rules) {
-    if (startCandidates(rule, level.length).length === 0) {
-      throw new Error(`${level.id}：規則 ${JSON.stringify(rule)} 出不了題`);
+  for (const mode of ['easy', 'hard', 'genius'] as const) {
+    const { rules, length } = settingsFor(level, mode);
+    if (mode !== 'easy' && (length < 7 || length > 8)) throw new Error(`${level.id}：${mode} 版要 7～8 個數`);
+    if (rules.length === 0) throw new Error(`${level.id}：${mode} 版沒有規則`);
+    for (const rule of rules) {
+      if (!feasible(rule, length)) throw new Error(`${level.id}：${mode} 版規則 ${JSON.stringify(rule)} 出不了題`);
     }
   }
 }
 
 /** 關卡裡所有數的範圍；錯誤選項也不能超出這個範圍 */
-export function levelRange(level: Level): { min: number; max: number } {
+export function levelRange(level: Level, mode: Mode = 'easy'): { min: number; max: number } {
+  const { rules } = settingsFor(level, mode);
   return {
-    min: Math.min(...level.rules.map((rule) => rule.min)),
-    max: Math.max(...level.rules.map((rule) => rule.max)),
+    min: Math.min(...rules.map((rule) => rule.min)),
+    max: Math.max(...rules.map((rule) => rule.max)),
   };
 }
 
@@ -74,26 +152,61 @@ function makeChoices(level: Level, terms: number[], answer: number, step: number
   return shuffle(rng, [answer, ...wrong]);
 }
 
-export function generateQuestion(level: Level, rng: Rng, type?: QuestionType): Question {
-  const questionType = type ?? pick(rng, level.types);
-  const rule = pick(rng, level.rules);
-  const start = pick(rng, startCandidates(rule, level.length));
-  const terms = Array.from({ length: level.length }, (_, i) => start + i * rule.step);
+/**
+ * 多個空格的位置合不合理：
+ * 看得到的數至少 3 個（答案才唯一）、不能連續三格空格、
+ * 至少有一對相鄰的數兩個都看得到（孩子才看得出每次差多少，第 1 層提示也才有東西可以標）。
+ */
+export function validBlanks(blanks: number[], length: number): boolean {
+  const set = new Set(blanks);
+  if (length - set.size < 3) return false;
+  for (let i = 0; i + 2 < length; i++) {
+    if (set.has(i) && set.has(i + 1) && set.has(i + 2)) return false;
+  }
+  for (let i = 0; i + 1 < length; i++) {
+    if (!set.has(i) && !set.has(i + 1)) return true;
+  }
+  return false;
+}
 
-  const blankIndex =
-    questionType === 'next'
-      ? level.length - 1
-      : randomInt(rng, level.blankFirst ? 0 : 1, level.length - 1);
-  const answer = terms[blankIndex]!;
-  const choices = questionType === 'next' ? makeChoices(level, terms, answer, rule.step, rng) : [];
+function pickBlanks(rng: Rng, length: number, mode: 'hard' | 'genius'): number[] {
+  const count = randomInt(rng, BLANK_COUNTS[mode].min, BLANK_COUNTS[mode].max);
+  const positions = Array.from({ length }, (_, i) => i);
+  for (;;) {
+    const blanks = shuffle(rng, positions).slice(0, count).sort((a, b) => a - b);
+    if (validBlanks(blanks, length)) return blanks;
+  }
+}
+
+export interface QuestionOptions {
+  type?: QuestionType;
+  mode?: Mode;
+}
+
+export function generateQuestion(level: Level, rng: Rng, options: QuestionOptions = {}): Question {
+  const mode = options.mode ?? 'easy';
+  const settings = settingsFor(level, mode);
+  const type = options.type ?? pick(rng, settings.types);
+  const rule = pick(rng, settings.rules);
+  const start = pick(rng, startCandidates(rule, settings.length));
+  const terms = Array.from({ length: settings.length }, (_, i) => start + i * rule.step);
+
+  let blanks: number[];
+  if (type === 'next') blanks = [settings.length - 1];
+  else if (mode === 'easy') blanks = [randomInt(rng, level.blankFirst ? 0 : 1, settings.length - 1)];
+  else blanks = pickBlanks(rng, settings.length, mode);
+
+  const answers = blanks.map((i) => terms[i]!);
+  const choices = type === 'next' ? makeChoices(level, terms, answers[0]!, rule.step, rng) : [];
 
   return {
-    key: `${questionType}:${terms.join(',')}:${blankIndex}`,
+    key: `${mode}:${type}:${terms.join(',')}:${blanks.join('|')}`,
     levelId: level.id,
-    type: questionType,
+    mode,
+    type,
     terms,
-    blankIndex,
-    answer,
+    blanks,
+    answers,
     step: rule.step,
     ...(rule.times ? { timesOf: Math.abs(rule.step) } : {}),
     choices,
@@ -101,27 +214,39 @@ export function generateQuestion(level: Level, rng: Rng, type?: QuestionType): Q
 }
 
 /**
- * 題目難度，數字越大越難：
- * 選擇題 < 補空格（空格在最後）< 補空格（空格在中間）< 補空格（空格在第一個）
+ * 題目難度排序，數字越大越難：
+ * 選擇題 < 一個空格（最後 < 中間 < 第一個）< 兩個空格 < 三個空格；空格在開頭的再難一點
  */
-export function difficulty(question: Question): number {
-  if (question.type === 'next') return 0;
-  if (question.blankIndex === question.terms.length - 1) return 1;
-  return question.blankIndex > 0 ? 2 : 3;
+export function questionRank(question: Question): number {
+  const { type, blanks, terms } = question;
+  if (type === 'next') return 0;
+  if (blanks.length === 1) {
+    const blank = blanks[0]!;
+    if (blank === terms.length - 1) return 1;
+    return blank > 0 ? 2 : 3;
+  }
+  return 4 + (blanks.length - 2) * 2 + (blanks.includes(0) ? 1 : 0);
+}
+
+export interface RoundOptions {
+  count?: number;
+  mode?: Mode;
 }
 
 /** 產生一回合的題目：各題型都會出現、同一回合不重複，並且由易到難排列 */
-export function generateRound(level: Level, rng: Rng, count = 5): Question[] {
-  const types = Array.from({ length: count }, (_, i) => level.types[i % level.types.length]!);
+export function generateRound(level: Level, rng: Rng, options: RoundOptions = {}): Question[] {
+  const { count = 5, mode = 'easy' } = options;
+  const { types } = settingsFor(level, mode);
   const questions: Question[] = [];
   const seen = new Set<string>();
-  for (const type of types) {
-    let question = generateQuestion(level, rng, type);
+  for (let i = 0; i < count; i++) {
+    const type = types[i % types.length]!;
+    let question = generateQuestion(level, rng, { type, mode });
     for (let tries = 0; seen.has(question.key) && tries < 50; tries++) {
-      question = generateQuestion(level, rng, type);
+      question = generateQuestion(level, rng, { type, mode });
     }
     seen.add(question.key);
     questions.push(question);
   }
-  return questions.sort((a, b) => difficulty(a) - difficulty(b));
+  return questions.sort((a, b) => questionRank(a) - questionRank(b));
 }

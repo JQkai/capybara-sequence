@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { LEVELS, isUnlocked, type Level } from '@kidstudy/game-core';
+import { LEVELS, MODES, MODE_NAMES, isPlayable, starsKey, type Level, type Mode } from '@kidstudy/game-core';
 import Capybara from './Capybara.vue';
 import StarRow from './StarRow.vue';
 import { progress, settings, type TermKey } from '../store';
@@ -25,16 +25,25 @@ const levels = computed(() =>
   LEVELS.filter((level) => `${level.grade}-${level.semester}` === settings.term),
 );
 
+const MODE_HELP: Record<Mode, { desc: string; locked: string }> = {
+  easy: { desc: '5 個數、1 個空格', locked: '前一關拿到星星就能玩' },
+  hard: { desc: '7～8 個數、2～3 個空格', locked: '簡單版拿到 2 顆星就能玩' },
+  genius: { desc: '3 個空格，還會不從倍數開始、跨過整百、往回數', locked: '困難版拿到 2 顆星就能玩' },
+};
+
 const stops = computed(() =>
-  levels.value.map((level, i) => ({
-    level,
-    number: i + 1,
-    x: X_PATTERN[i % X_PATTERN.length]!,
-    y: TOP + i * ROW,
-    stars: progress.bestStars[level.id] ?? 0,
-    played: level.id in progress.bestStars,
-    unlocked: isUnlocked(level, progress.bestStars),
-  })),
+  levels.value.map((level, i) => {
+    const key = starsKey(level.id, settings.mode);
+    return {
+      level,
+      number: i + 1,
+      x: X_PATTERN[i % X_PATTERN.length]!,
+      y: TOP + i * ROW,
+      stars: progress.bestStars[key] ?? 0,
+      played: key in progress.bestStars,
+      unlocked: isPlayable(level, settings.mode, progress.bestStars),
+    };
+  }),
 );
 
 /** 卡皮巴拉站在第一個還沒拿到星星的關卡上 */
@@ -101,8 +110,24 @@ const termStars = computed(() => stops.value.reduce((sum, s) => sum + s.stars, 0
     </button>
   </nav>
 
+  <div class="modes" role="radiogroup" aria-label="選擇難度">
+    <button
+      v-for="mode in MODES"
+      :key="mode"
+      type="button"
+      role="radio"
+      class="mode"
+      :class="mode"
+      :aria-checked="settings.mode === mode"
+      @click="settings.mode = mode"
+    >
+      {{ MODE_NAMES[mode] }}
+    </button>
+  </div>
+  <p class="mode-help">{{ MODE_HELP[settings.mode].desc }}</p>
+
   <p class="summary">
-    {{ termLabel }}・已經拿到
+    {{ termLabel }}・{{ MODE_NAMES[settings.mode] }}版・已經拿到
     <strong>{{ termStars }}</strong> / {{ stops.length * 3 }} 顆星
   </p>
 
@@ -133,7 +158,7 @@ const termStars = computed(() => stops.value.reduce((sum, s) => sum + s.stars, 0
       <div class="label">
         <span class="title">{{ stop.level.title }}</span>
         <StarRow v-if="stop.played" :count="stop.stars" />
-        <span v-else class="desc">{{ stop.unlocked ? stop.level.description : '前一關拿到星星就能玩' }}</span>
+        <span v-else class="desc">{{ stop.unlocked ? stop.level.description : MODE_HELP[settings.mode].locked }}</span>
       </div>
     </div>
 
@@ -219,6 +244,49 @@ h1 {
 .tab[aria-selected='true'] {
   background: var(--primary);
   color: #fff;
+}
+
+.modes {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.mode {
+  min-width: 76px;
+  min-height: 40px;
+  padding: 4px 16px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.mode.easy[aria-checked='true'] {
+  border-color: var(--correct);
+  background: var(--correct);
+  color: #fff;
+}
+
+.mode.hard[aria-checked='true'] {
+  border-color: #d48806;
+  background: var(--accent);
+  color: #3a2a1c;
+}
+
+.mode.genius[aria-checked='true'] {
+  border-color: var(--genius);
+  background: var(--genius);
+  color: #fff;
+}
+
+.mode-help {
+  margin: 6px 0 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-soft);
 }
 
 .summary {

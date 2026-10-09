@@ -8,10 +8,13 @@ export function describeRule(step: number): string {
 export interface Explanation {
   /** 規律，例如「每次多 5」 */
   rule: string;
-  /** 從看得到的數推到空格，例如「15 再多 5 是 20」「比 50 少 10 是 40」 */
-  reason: string;
-  /** 乘法數列才有，用「倍」說明答案，例如「4 的 5 倍是 20」（N-2-6） */
-  times?: string;
+  /**
+   * 每個空格怎麼推出來，例如「15 再多 5 是 20」「比 50 少 10 是 40」。
+   * 依推算的順序排列：旁邊有數的空格先說，要靠旁邊空格才推得出來的後說。
+   */
+  reasons: string[];
+  /** 乘法數列才有，用「倍」說明每個空格的答案，例如「4 的 5 倍是 20」（N-2-6）；順序和 reasons 相同 */
+  times: string[];
 }
 
 /** 從 from 加上 diff 得到 to，說成「15 再多 5 是 20」或「比 50 少 10 是 40」 */
@@ -21,23 +24,41 @@ function describeStep(from: number, diff: number, to: number | string): string {
   return diff > 0 ? `${from} 再多 ${diff} 是${target}` : `比 ${from} 少 ${-diff} 是${target}`;
 }
 
+/** 空格旁邊有沒有看得到的數：回傳那個數的位置，左邊優先；兩邊都是空格時回傳 undefined */
+export function knownNeighbor(question: Question, position: number): number | undefined {
+  const { blanks, terms } = question;
+  const isKnown = (i: number) => i >= 0 && i < terms.length && !blanks.includes(i);
+  if (isKnown(position - 1)) return position - 1;
+  if (isKnown(position + 1)) return position + 1;
+  return undefined;
+}
+
 /**
- * 從空格旁邊看得到的數往空格推：空格前面有數就從前一個往後推，空格在第一個就從第二個往回推。
+ * 從旁邊的數推出某個空格：優先用看得到的數（左邊優先），
+ * 兩邊都是空格時（連續空格在開頭，例如 □、□、15）就從旁邊那個空格的答案推。
  * to 傳答案就是說明，傳「多少」就是引導孩子自己算的提示。
  */
-export function reasonFor(question: Question, to: number | string): string {
-  const { terms, blankIndex, step } = question;
-  return blankIndex > 0
-    ? describeStep(terms[blankIndex - 1]!, step, to)
-    : describeStep(terms[1]!, -step, to);
+export function reasonFor(question: Question, position: number, to: number | string): string {
+  const { terms, step } = question;
+  const from = knownNeighbor(question, position) ?? (position > 0 ? position - 1 : position + 1);
+  return from < position
+    ? describeStep(terms[from]!, step, to)
+    : describeStep(terms[from]!, -step, to);
 }
 
 export function explain(question: Question): Explanation {
-  const { answer, step, timesOf } = question;
-  const reason = reasonFor(question, answer);
-  return {
-    rule: describeRule(step),
-    reason,
-    ...(timesOf ? { times: `${timesOf} 的 ${answer / timesOf} 倍是 ${answer}` } : {}),
-  };
+  const { blanks, answers, step, timesOf } = question;
+  // 兩邊都看不到數的空格，要等旁邊的空格算出來才能推，所以先說明旁邊有數的空格
+  const order = [...blanks.keys()].sort(
+    (a, b) =>
+      Number(knownNeighbor(question, blanks[a]!) === undefined) -
+      Number(knownNeighbor(question, blanks[b]!) === undefined),
+  );
+  const reasons: string[] = [];
+  const times: string[] = [];
+  for (const k of order) {
+    reasons.push(reasonFor(question, blanks[k]!, answers[k]!));
+    if (timesOf) times.push(`${timesOf} 的 ${answers[k]! / timesOf} 倍是 ${answers[k]}`);
+  }
+  return { rule: describeRule(step), reasons, times };
 }

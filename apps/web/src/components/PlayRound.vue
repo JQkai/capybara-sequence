@@ -4,20 +4,23 @@ import {
   HINT_LEVELS,
   LEVELS,
   MAX_ATTEMPTS,
+  MODES,
+  MODE_NAMES,
   checkAnswer,
   createRng,
   explain,
   generateRound,
   hintFor,
-  isUnlocked,
+  isPlayable,
   levelRange,
   questionPoints,
   starsFor,
   type Level,
+  type Mode,
   type Question,
   type QuestionResult,
 } from '@kidstudy/game-core';
-import SequenceRow from './SequenceRow.vue';
+import SequenceRow, { type BlankStatus } from './SequenceRow.vue';
 import NumberPad from './NumberPad.vue';
 import ChoiceButtons from './ChoiceButtons.vue';
 import Capybara from './Capybara.vue';
@@ -28,12 +31,20 @@ import { playCorrect, playStars, playWrong } from '../sound';
 
 const ROUND_SIZE = 5;
 
-const props = defineProps<{ level: Level }>();
-const emit = defineEmits<{ exit: []; play: [level: Level] }>();
+const props = defineProps<{ level: Level; mode: Mode }>();
+const emit = defineEmits<{ exit: []; play: [level: Level, mode: Mode] }>();
 
 const questions = ref<Question[]>([]);
 const index = ref(0);
-const input = ref('');
+/** 補空格題每一格輸入的內容，key 是空格位置 */
+const inputs = ref<Record<number, string>>({});
+/** 正在填的空格 */
+const active = ref(0);
+/** 已經答對、不用再填的空格（再試一次時） */
+const locked = ref<number[]>([]);
+/** 上一次檢查時答錯的空格 */
+const wrongBlanks = ref<number[]>([]);
+/** 選擇題選的數 */
 const picked = ref<number | null>(null);
 const status = ref<'answering' | 'correct' | 'wrong'>('answering');
 /** 這題已經送出幾次答案 */
@@ -46,19 +57,52 @@ const results = ref<QuestionResult[]>([]);
 const finished = ref(false);
 const stars = ref(0);
 const newBest = ref(false);
+/** 這回合打開了哪個更難的版本 */
+const unlockedMode = ref<Mode | null>(null);
 
 /** 輸入框最多幾位數：依關卡最大的數決定，例如 1000 以內是 4 位 */
-const maxDigits = String(levelRange(props.level).max).length;
+const maxDigits = String(levelRange(props.level, props.mode).max).length;
 
 const question = computed(() => questions.value[index.value]!);
+const blanks = computed(() => question.value.blanks);
+const multi = computed(() => blanks.value.length > 1);
+const openBlanks = computed(() => blanks.value.filter((b) => !locked.value.includes(b)));
 const explanation = computed(() => explain(question.value));
-const hint = computed(() => hintFor(question.value));
+const hint = computed(() => hintFor(question.value, active.value));
 const isLast = computed(() => index.value === questions.value.length - 1);
 const retrying = computed(() => status.value === 'answering' && tries.value > 0);
-const prompt = computed(() => (question.value.type === 'next' ? '下一顆石頭上是哪個數？' : '空格裡要填多少？'));
-const blankText = computed(() => {
-  if (question.value.type === 'next') return status.value === 'answering' ? '?' : String(picked.value);
-  return input.value || '?';
+const allFilled = computed(() => openBlanks.value.every((b) => inputs.value[b]));
+const harderMode = computed(() => MODES[MODES.indexOf(props.mode) + 1]);
+
+const prompt = computed(() => {
+  if (question.value.type === 'next') return '下一顆石頭上是哪個數？';
+  return multi.value ? '每個空格裡要填多少？' : '空格裡要填多少？';
+});
+
+const blankTexts = computed(() => {
+  const texts: Record<number, string> = {};
+  blanks.value.forEach((b, k) => {
+    if (question.value.type === 'next') texts[b] = status.value === 'answering' ? '?' : String(picked.value);
+    else if (status.value === 'wrong' && wrongBlanks.value.includes(b)) texts[b] = String(question.value.answers[k]);
+    else texts[b] = inputs.value[b] || '?';
+  });
+  return texts;
+});
+
+const blankStatus = computed(() => {
+  const result: Record<number, BlankStatus> = {};
+  for (const b of blanks.value) {
+    if (status.value === 'correct') result[b] = 'correct';
+    else if (status.value === 'wrong') {
+      // 選擇題答錯顯示孩子選的數；補空格答錯直接在格子裡顯示正確答案
+      if (!wrongBlanks.value.includes(b)) result[b] = 'correct';
+      else result[b] = question.value.type === 'next' ? 'wrong' : 'reveal';
+    } else if (locked.value.includes(b)) result[b] = 'correct';
+    else if (wrongBlanks.value.includes(b) && !inputs.value[b]) result[b] = 'retry';
+    else if (b === active.value && multi.value) result[b] = 'active';
+    else result[b] = 'answering';
+  }
+  return result;
 });
 
 const HINT_INTRO = '看看石頭下面的數字，每兩顆差多少？';
@@ -71,21 +115,25 @@ function hintSpeech(level: number): string {
 
 function questionSpeech(): string {
   const q = question.value;
-  const row = q.terms.map((t, i) => (i === q.blankIndex ? '空格' : String(t))).join('，');
+  const row = q.terms.map((t, i) => (q.blanks.includes(i) ? '空格' : String(t))).join('，');
   const options = q.type === 'next' ? `是 ${q.choices.join('、')} 裡的哪一個？` : '';
   return `${row}。${prompt.value}${options}`;
 }
 
 function start() {
-  questions.value = generateRound(props.level, createRng(Date.now()), ROUND_SIZE);
+  questions.value = generateRound(props.level, createRng(Date.now()), { count: ROUND_SIZE, mode: props.mode });
   index.value = 0;
   results.value = [];
   finished.value = false;
+  unlockedMode.value = null;
   resetQuestion();
 }
 
 function resetQuestion() {
-  input.value = '';
+  inputs.value = {};
+  active.value = blanks.value[0]!;
+  locked.value = [];
+  wrongBlanks.value = [];
   picked.value = null;
   status.value = 'answering';
   tries.value = 0;
@@ -93,35 +141,81 @@ function resetQuestion() {
   eliminated.value = [];
 }
 
-function submit(value: number | string) {
-  if (status.value !== 'answering') return;
-  tries.value++;
-  const { rule, reason, times } = explanation.value;
-  const timesText = times ? `${times}。` : '';
-
-  if (checkAnswer(question.value, value)) {
-    status.value = 'correct';
-    results.value.push({ correct: true, attempts: tries.value, hintsUsed: hintLevel.value });
-    playCorrect();
-    speak(`答對了！規律是${rule}。${timesText}`);
-  } else if (tries.value < MAX_ATTEMPTS) {
-    // 第一次答錯：給提示，再試一次
-    if (question.value.type === 'next') eliminated.value.push(Number(value));
-    input.value = '';
-    hintLevel.value = Math.max(hintLevel.value, 1);
-    playWrong();
-    speak(`再想想看。${hintSpeech(hintLevel.value)}`);
-  } else {
-    status.value = 'wrong';
-    results.value.push({ correct: false, attempts: tries.value, hintsUsed: hintLevel.value });
-    playWrong();
-    speak(`正確答案是 ${question.value.answer}。規律是${rule}，${reason}。${timesText}`);
-  }
+function timesText(): string {
+  return explanation.value.times.length ? `${explanation.value.times.join('，')}。` : '';
 }
 
+function markCorrect() {
+  status.value = 'correct';
+  results.value.push({ correct: true, attempts: tries.value, hintsUsed: hintLevel.value });
+  playCorrect();
+  speak(`答對了！規律是${explanation.value.rule}。${timesText()}`);
+}
+
+function markWrong() {
+  status.value = 'wrong';
+  results.value.push({ correct: false, attempts: tries.value, hintsUsed: hintLevel.value });
+  playWrong();
+  const answers = question.value.answers.join('、');
+  speak(
+    `正確答案${multi.value ? '依序' : ''}是 ${answers}。規律是${explanation.value.rule}，${explanation.value.reasons.join('；')}。${timesText()}`,
+  );
+}
+
+function retry(message: string) {
+  hintLevel.value = Math.max(hintLevel.value, 1);
+  playWrong();
+  speak(`${message}${hintSpeech(hintLevel.value)}`);
+}
+
+/** 選擇題 */
 function choose(value: number) {
+  if (status.value !== 'answering') return;
   picked.value = value;
-  submit(value);
+  tries.value++;
+  if (checkAnswer(question.value, value)) return markCorrect();
+  wrongBlanks.value = [blanks.value[0]!];
+  if (tries.value < MAX_ATTEMPTS) {
+    eliminated.value.push(value);
+    picked.value = null;
+    retry('再想想看。');
+  } else markWrong();
+}
+
+/** 補空格：全部填好才檢查；答對的格子保留，答錯的清掉再試一次 */
+function checkFill() {
+  if (status.value !== 'answering' || !allFilled.value) return;
+  tries.value++;
+  const wrong = openBlanks.value.filter((b) => !checkAnswer(question.value, inputs.value[b]!, b));
+  if (wrong.length === 0) return markCorrect();
+  wrongBlanks.value = wrong;
+  if (tries.value < MAX_ATTEMPTS) {
+    locked.value = blanks.value.filter((b) => !wrong.includes(b));
+    for (const b of wrong) inputs.value[b] = '';
+    active.value = wrong[0]!;
+    const right = blanks.value.length - wrong.length;
+    retry(multi.value && right > 0 ? `答對 ${right} 格了！紅色的格子再想想看。` : '再想想看。');
+  } else markWrong();
+}
+
+/** 確定鍵：還有空格沒填就跳到下一個空格，全部填好才檢查 */
+function confirm() {
+  if (status.value !== 'answering' || !inputs.value[active.value]) return;
+  if (allFilled.value) return checkFill();
+  const open = openBlanks.value;
+  const from = open.indexOf(active.value);
+  const nextEmpty = [...open.slice(from + 1), ...open.slice(0, from)].find((b) => !inputs.value[b]);
+  if (nextEmpty !== undefined) active.value = nextEmpty;
+}
+
+function selectBlank(position: number) {
+  if (status.value === 'answering' && openBlanks.value.includes(position)) active.value = position;
+}
+
+function moveActive(direction: 1 | -1) {
+  const open = openBlanks.value;
+  const next = open[open.indexOf(active.value) + direction];
+  if (next !== undefined) active.value = next;
 }
 
 function showHint() {
@@ -131,13 +225,14 @@ function showHint() {
 }
 
 function typeDigit(digit: string) {
-  if (status.value !== 'answering' || input.value.length >= maxDigits) return;
+  const current = inputs.value[active.value] ?? '';
+  if (status.value !== 'answering' || current.length >= maxDigits) return;
   // 不允許開頭多打 0，例如 05
-  input.value = input.value === '0' ? digit : input.value + digit;
+  inputs.value[active.value] = current === '0' ? digit : current + digit;
 }
 
 function erase() {
-  if (status.value === 'answering') input.value = input.value.slice(0, -1);
+  if (status.value === 'answering') inputs.value[active.value] = (inputs.value[active.value] ?? '').slice(0, -1);
 }
 
 function next() {
@@ -149,19 +244,29 @@ function next() {
 }
 
 function finish() {
+  const before = harderMode.value && isPlayable(props.level, harderMode.value, progress.bestStars);
   finished.value = true;
   stars.value = starsFor(results.value);
-  newBest.value = recordStars(props.level.id, stars.value);
+  newBest.value = recordStars(props.level.id, props.mode, stars.value);
+  if (harderMode.value && !before && isPlayable(props.level, harderMode.value, progress.bestStars)) {
+    unlockedMode.value = harderMode.value;
+  }
   playStars(stars.value);
-  speak(`拿到 ${stars.value} 顆星。${resultMessage.value}`);
+  const unlocked = unlockedMode.value ? `解鎖${MODE_NAMES[unlockedMode.value]}版了！` : '';
+  speak(`拿到 ${stars.value} 顆星。${resultMessage.value}${unlocked}`);
 }
 
-/** 同一學期的下一關；這回合拿到星星後才會解鎖 */
+/** 同一學期、同一難度的下一關 */
 const nextLevel = computed(() => {
   const term = LEVELS.filter((l) => l.grade === props.level.grade && l.semester === props.level.semester);
   const following = term[term.findIndex((l) => l.id === props.level.id) + 1];
-  return following && isUnlocked(following, progress.bestStars) ? following : undefined;
+  return following && isPlayable(following, props.mode, progress.bestStars) ? following : undefined;
 });
+
+/** 這關更難的版本已經可以玩 */
+const harderPlayable = computed(
+  () => harderMode.value !== undefined && isPlayable(props.level, harderMode.value, progress.bestStars),
+);
 
 const soloCount = computed(() => results.value.filter((r) => questionPoints(r) === 2).length);
 const helpedCount = computed(() => results.value.filter((r) => questionPoints(r) === 1).length);
@@ -186,10 +291,12 @@ function onKeydown(event: KeyboardEvent) {
   if (question.value.type !== 'fill') return;
   if (/^[0-9]$/.test(event.key)) typeDigit(event.key);
   else if (event.key === 'Backspace') erase();
+  else if (event.key === 'ArrowRight') moveActive(1);
+  else if (event.key === 'ArrowLeft') moveActive(-1);
   else if (event.key === 'Enter') {
     // 避免 Enter 觸發正好有焦點的鍵盤按鈕
     event.preventDefault();
-    if (input.value) submit(input.value);
+    confirm();
   }
 }
 
@@ -214,7 +321,10 @@ onBeforeUnmount(() => {
 <template>
   <header class="bar">
     <button type="button" class="btn secondary back" @click="emit('exit')">← 地圖</button>
-    <h1>{{ level.title }}</h1>
+    <h1>
+      {{ level.title }}
+      <span class="mode" :class="mode">{{ MODE_NAMES[mode] }}</span>
+    </h1>
     <ol class="progress" :aria-label="`第 ${index + 1} 題，共 ${questions.length} 題`">
       <li
         v-for="(_, i) in questions"
@@ -237,11 +347,21 @@ onBeforeUnmount(() => {
     <p class="detail">
       自己答對 {{ soloCount }} 題・有幫忙才答對 {{ helpedCount }} 題（共 {{ ROUND_SIZE }} 題）
     </p>
+    <p v-if="unlockedMode" class="unlocked">🔓 解鎖「{{ level.title }}」{{ MODE_NAMES[unlockedMode] }}版了！</p>
     <div class="actions">
-      <button v-if="nextLevel" type="button" class="btn" @click="emit('play', nextLevel)">
+      <button v-if="nextLevel" type="button" class="btn" @click="emit('play', nextLevel, mode)">
         下一關：{{ nextLevel.title }} →
       </button>
-      <button type="button" class="btn" :class="{ secondary: nextLevel }" @click="start">再玩一次</button>
+      <button
+        v-if="harderMode && harderPlayable"
+        type="button"
+        class="btn"
+        :class="{ secondary: nextLevel }"
+        @click="emit('play', level, harderMode)"
+      >
+        挑戰{{ MODE_NAMES[harderMode] }}版 →
+      </button>
+      <button type="button" class="btn secondary" @click="start">再玩一次</button>
       <button type="button" class="btn secondary" @click="emit('exit')">回地圖</button>
     </div>
   </section>
@@ -260,18 +380,25 @@ onBeforeUnmount(() => {
         🔊
       </button>
     </div>
+    <p v-if="multi && status === 'answering'" class="tip">點一下空格，可以選要填哪一格</p>
 
     <SequenceRow
       :terms="question.terms"
-      :blank-index="question.blankIndex"
-      :blank-text="blankText"
-      :status="retrying ? 'retry' : status"
+      :blanks="blanks"
+      :blank-texts="blankTexts"
+      :blank-status="blankStatus"
+      :mascot-at="status === 'answering' ? active : blanks[0]!"
       :gaps="hintLevel >= 1 ? hint.gaps : []"
+      :selectable="multi && status === 'answering'"
+      @select="selectBlank"
     />
 
-    <div v-if="status === 'answering' && (retrying || hintLevel > 0)" class="hint-box" aria-live="polite">
-      <p v-if="retrying" class="headline">再想想看！</p>
-      <p v-if="hintLevel >= 1">💡 {{ HINT_INTRO }}</p>
+    <!-- 提示框作答後也留著，下方的選項才不會往上跳，避免孩子連點時點錯 -->
+    <div v-if="hintLevel > 0" class="hint-box" aria-live="polite">
+      <p v-if="retrying" class="headline">
+        {{ multi && locked.length > 0 ? `答對 ${locked.length} 格了！紅色的格子再想想看` : '再想想看！' }}
+      </p>
+      <p>💡 {{ HINT_INTRO }}</p>
       <p v-if="hintLevel >= 2">💡 規律是「{{ hint.rule }}」</p>
       <p v-if="hintLevel >= 3">💡 {{ hint.guide }}</p>
     </div>
@@ -280,7 +407,7 @@ onBeforeUnmount(() => {
       <ChoiceButtons
         v-if="question.type === 'next'"
         :choices="question.choices"
-        :answer="question.answer"
+        :answer="question.answers[0]!"
         :picked="picked"
         :status="status"
         :eliminated="eliminated"
@@ -289,10 +416,11 @@ onBeforeUnmount(() => {
       <NumberPad
         v-else
         :disabled="status !== 'answering'"
-        :can-submit="input.length > 0"
+        :can-submit="!!inputs[active]"
+        :submit-label="allFilled ? '確定' : '下一格'"
         @digit="typeDigit"
         @erase="erase"
-        @submit="submit(input)"
+        @submit="confirm"
       />
     </div>
 
@@ -309,10 +437,10 @@ onBeforeUnmount(() => {
           <p>規律是「{{ explanation.rule }}」</p>
         </template>
         <template v-else>
-          <p class="headline">正確答案是 {{ question.answer }}</p>
-          <p>規律是「{{ explanation.rule }}」，{{ explanation.reason }}。</p>
+          <p class="headline">正確答案{{ multi ? '依序' : '' }}是 {{ question.answers.join('、') }}</p>
+          <p>規律是「{{ explanation.rule }}」，{{ explanation.reasons.join('；') }}。</p>
         </template>
-        <p v-if="explanation.times">{{ explanation.times }}。</p>
+        <p v-if="explanation.times.length">{{ explanation.times.join('，') }}。</p>
         <button type="button" class="btn" @click="next">{{ isLast ? '看結果' : '下一題' }}</button>
       </div>
     </div>
@@ -338,6 +466,26 @@ h1 {
   margin: 0;
   font-size: 1.3rem;
   color: var(--primary-dark);
+}
+
+.mode {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  vertical-align: middle;
+  color: #fff;
+  background: var(--correct);
+}
+
+.mode.hard {
+  background: var(--accent);
+  color: var(--text);
+}
+
+.mode.genius {
+  background: var(--genius);
 }
 
 .progress {
@@ -391,6 +539,13 @@ h1 {
   text-align: center;
   font-size: 1.3rem;
   font-weight: 700;
+}
+
+.tip {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-soft);
 }
 
 .icon-btn {
@@ -504,6 +659,12 @@ h1 {
 .detail {
   margin: 0;
   color: var(--text-soft);
+}
+
+.unlocked {
+  margin: 14px 0 0;
+  font-weight: 800;
+  color: var(--primary-dark);
 }
 
 .actions {

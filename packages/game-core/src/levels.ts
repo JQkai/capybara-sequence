@@ -2,7 +2,7 @@ import type { Level, QuestionType, StepRule } from './types';
 
 const BOTH: QuestionType[] = ['next', 'fill'];
 
-/** 九九乘法某幾段的數列，例如 2 的乘法：2、4、6……18 */
+/** 九九乘法某幾段的數列，例如 2 的乘法：2、4、6……18；descending 為 true 時也會往回數（困難、天才版） */
 function timesRules(factors: number[], descending = false): StepRule[] {
   return factors.flatMap((n) => {
     const up: StepRule = { step: n, min: n, max: 9 * n, startMultiple: true, times: true };
@@ -95,6 +95,8 @@ export const LEVELS: Level[] = [
     curriculum: ['N-1-1'],
     // 50 以內只從 10 的倍數開始的話，只有 10～50 一種數列，所以也從 0～9 開始
     rules: [{ step: 10, min: 0, max: 50 }],
+    // 7～8 個數十個一數至少要跨 60，50 以內排不下；困難、天才版放寬到 100（康軒一下第 11 週學到 100）
+    hard: { rules: [{ step: 10, min: 0, max: 100 }] },
     length: 5,
     types: BOTH,
     choiceCount: 3,
@@ -148,6 +150,7 @@ export const LEVELS: Level[] = [
     description: '照著乘法的數往上數',
     curriculum: ['N-2-6', 'N-2-7'],
     rules: timesRules([2, 5]),
+    hard: { rules: timesRules([2, 5], true) },
     length: 5,
     types: BOTH,
     choiceCount: 4,
@@ -161,6 +164,7 @@ export const LEVELS: Level[] = [
     description: '照著乘法的數往上數',
     curriculum: ['N-2-6', 'N-2-7'],
     rules: timesRules([4, 8]),
+    hard: { rules: timesRules([4, 8], true) },
     length: 5,
     types: BOTH,
     choiceCount: 4,
@@ -174,6 +178,7 @@ export const LEVELS: Level[] = [
     description: '照著乘法的數往上數',
     curriculum: ['N-2-6', 'N-2-7'],
     rules: timesRules([3, 6]),
+    hard: { rules: timesRules([3, 6], true) },
     length: 5,
     types: BOTH,
     choiceCount: 4,
@@ -187,6 +192,7 @@ export const LEVELS: Level[] = [
     description: '照著乘法的數往上數',
     curriculum: ['N-2-6', 'N-2-7'],
     rules: timesRules([7, 9]),
+    hard: { rules: timesRules([7, 9], true) },
     length: 5,
     types: BOTH,
     choiceCount: 4,

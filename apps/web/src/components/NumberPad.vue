@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ disabled: boolean; canSubmit: boolean }>();
+withDefaults(defineProps<{ disabled: boolean; canSubmit: boolean; submitLabel?: string }>(), { submitLabel: '確定' });
 const emit = defineEmits<{ digit: [value: string]; erase: []; submit: [] }>();
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -12,7 +12,9 @@ const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
     </button>
     <button type="button" class="key erase" :disabled="disabled" aria-label="刪除" @click="emit('erase')">⌫</button>
     <button type="button" class="key" :disabled="disabled" @click="emit('digit', '0')">0</button>
-    <button type="button" class="key ok" :disabled="disabled || !canSubmit" @click="emit('submit')">確定</button>
+    <button type="button" class="key ok" :disabled="disabled || !canSubmit" @click="emit('submit')">
+      {{ submitLabel }}
+    </button>
   </div>
 </template>
 

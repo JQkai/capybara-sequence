@@ -1,4 +1,5 @@
 import { reactive, watch } from 'vue';
+import { starsKey, type Mode } from '@kidstudy/game-core';
 
 /**
  * 存在瀏覽器的資料：進度（每關最好拿過幾顆星）和設定。
@@ -36,22 +37,25 @@ export const settings = reactive(
     autoRead: true,
     /** 地圖上目前選的學期 */
     term: '1-1' as TermKey,
+    /** 地圖上目前選的難度 */
+    mode: 'easy' as Mode,
   }),
 );
 persist('capybara-sequence:settings:v1', settings);
 
 export const progress = reactive(
   load('capybara-sequence:progress:v1', {
-    /** 每關最好拿過幾顆星 */
+    /** 每關每個難度最好拿過幾顆星，key 見 starsKey（簡單版是關卡 id，其他是「id@hard」） */
     bestStars: {} as Record<string, number>,
   }),
 );
 persist('capybara-sequence:progress:v1', progress);
 
 /** 記下這回合的星星數；比以前多就更新，並回傳 true（新紀錄） */
-export function recordStars(levelId: string, stars: number): boolean {
-  const previous = progress.bestStars[levelId];
+export function recordStars(levelId: string, mode: Mode, stars: number): boolean {
+  const key = starsKey(levelId, mode);
+  const previous = progress.bestStars[key];
   if (previous !== undefined && stars <= previous) return false;
-  progress.bestStars[levelId] = stars;
+  progress.bestStars[key] = stars;
   return stars > (previous ?? 0);
 }
