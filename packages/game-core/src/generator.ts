@@ -36,18 +36,27 @@ function feasible(rule: StepRule, length: number): boolean {
   return startCandidates(rule, length).length > 0;
 }
 
+/** min 和 max 之間（不含兩端）有沒有 every 的倍數；沒有的話數列不可能真的「跨過」整十、整百 */
+function hasInteriorMultiple(min: number, max: number, every: number): boolean {
+  return Math.floor((max - 1) / every) * every > min;
+}
+
 /**
  * 天才版的變化：在困難版的規則上混合「不從倍數開始」「跨過整十、整百」「往回數」。
- * - 不從倍數開始：只用在 2、5、10、100 個一數；乘法數列不用，否則就不是那一段乘法了
+ * - 不從倍數開始：只用在 2、5、10、100 個一數；乘法數列不用，否則就不是那一段乘法了。
+ *   一年級只開放給設定 geniusOffStart 的關卡（百數表之後）
+ * - 跨過：數列的範圍裡要真的有整十、整百可以跨（例如「數到 10」最大就是 10，跨不過去）
  * - 往回數：只用在二年級（課綱 N-2-1「從某數開始前後數數」）
  * 原本的規則也留著一起混合出題，數列才不會太單調。
  */
 function geniusRules(level: Level, base: StepRule, length: number): StepRule[] {
   const size = Math.abs(base.step);
   const crossEvery = size < 10 ? 10 : size < 100 ? 100 : undefined;
-  const offs = base.startMultiple && !base.times ? [false, true] : [false];
+  const offStartAllowed = level.hard?.geniusOffStart ?? level.grade === 2;
+  const offs = base.startMultiple && !base.times && offStartAllowed ? [false, true] : [false];
   const descs = level.grade === 2 && base.step > 0 ? [false, true] : [false];
-  const crosses = crossEvery && !base.crossEvery ? [false, true] : [false];
+  const crosses =
+    crossEvery && !base.crossEvery && hasInteriorMultiple(base.min, base.max, crossEvery) ? [false, true] : [false];
 
   const variants: StepRule[] = [];
   for (const off of offs) {
@@ -94,6 +103,40 @@ export function settingsFor(level: Level, mode: Mode): ModeSettings {
     mode === 'hard' ? hardRules : uniqueRules(hardRules.flatMap((rule) => geniusRules(level, rule, length)));
   // 多個空格的選擇題不好操作，困難、天才版只出補空格
   return { rules, length, types: ['fill'] };
+}
+
+export interface GeniusTwists {
+  offStart: boolean;
+  crossTens: boolean;
+  crossHundreds: boolean;
+  descending: boolean;
+}
+
+/** 這關的天才版比困難版多了哪些變化 */
+export function geniusTwists(level: Level): GeniusTwists {
+  const hard = settingsFor(level, 'hard').rules;
+  const genius = settingsFor(level, 'genius').rules;
+  const added = (r: StepRule) => !hard.some((h) => h.step === r.step && h.crossEvery === r.crossEvery);
+  return {
+    offStart: genius.some((r) => r.offStart),
+    crossTens: genius.some((r) => r.crossEvery === 10 && added(r)),
+    crossHundreds: genius.some((r) => r.crossEvery === 100 && added(r)),
+    descending: genius.some((r) => !hard.some((h) => h.step === r.step)),
+  };
+}
+
+/** 給孩子看的天才版說明，依這些關卡實際有的變化產生，例如「一律 3 個空格，還會跨過整十、往回數」 */
+export function describeGenius(levels: Level[]): string {
+  const all = levels.map(geniusTwists);
+  const any = (key: keyof GeniusTwists) => all.some((t) => t[key]);
+  const extras = [
+    any('offStart') && '不從倍數開始',
+    any('crossTens') && '跨過整十',
+    any('crossHundreds') && '跨過整百',
+    any('descending') && '往回數',
+  ].filter(Boolean);
+  const blanks = `一律 ${BLANK_COUNTS.genius.max} 個空格`;
+  return extras.length ? `${blanks}，有些題目還會${extras.join('、')}` : blanks;
 }
 
 /** 關卡設定有沒有出不了題的規則；有的話丟出錯誤 */

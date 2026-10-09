@@ -3,7 +3,9 @@ import {
   LEVELS,
   MODES,
   createRng,
+  describeGenius,
   explain,
+  geniusTwists,
   generateQuestion,
   generateRound,
   isUniquelyDetermined,
@@ -133,11 +135,33 @@ describe.each(modeCases)('%s 出的題目', (_, level, mode) => {
 });
 
 describe('困難版', () => {
-  it('7～8 個數；排得下 8 個的關卡用 8 個', () => {
+  it('7～8 個數；沒有特別指定長度、又排得下 8 個的關卡用 8 個', () => {
     for (const level of LEVELS) {
       const { length, rules } = settingsFor(level, 'hard');
       expect([7, 8]).toContain(length);
-      if (rules.every((r) => startCandidates(r, 8).length > 0)) expect(length).toBe(8);
+      if (!level.hard?.length && rules.every((r) => startCandidates(r, 8).length > 0)) expect(length).toBe(8);
+    }
+  });
+
+  it.each(MODES.filter((m) => m !== 'easy'))('%s：每關至少 5 種數列，一回合不會一直出現同一串數', (mode) => {
+    for (const level of LEVELS) {
+      const { rules, length } = settingsFor(level, mode);
+      const sequences = new Set<string>();
+      for (const r of rules) {
+        for (const s of startCandidates(r, length)) sequences.add(`${s}/${r.step}`);
+      }
+      expect(sequences.size, level.id).toBeGreaterThanOrEqual(5);
+      const counts = new Map<string, number>();
+      for (const q of samples(level, mode)) counts.set(q.terms.join(','), (counts.get(q.terms.join(',')) ?? 0) + 1);
+      expect(Math.max(...counts.values()) / SAMPLES, level.id).toBeLessThan(0.35);
+    }
+  });
+
+  it('數到 10、倒著數的困難版 7 個數、可以有 0', () => {
+    for (const id of ['1a-to10', '1a-back']) {
+      const level = LEVELS.find((l) => l.id === id)!;
+      expect(settingsFor(level, 'hard').length).toBe(7);
+      expect([...samples(level, 'hard')].some((q) => q.terms.includes(0)), id).toBe(true);
     }
   });
 
@@ -161,10 +185,12 @@ describe('困難版', () => {
     expect(validBlanks([0, 2, 4], 5)).toBe(false);
   });
 
-  it('10 個一數困難版放寬到 100 以內，簡單版仍在 50 以內', () => {
-    const level = LEVELS.find((l) => l.id === '1b-by10')!;
-    expect(levelRange(level, 'easy').max).toBe(50);
-    expect(levelRange(level, 'hard').max).toBe(100);
+  it('5 個、10 個一數困難版放寬到 100 以內，簡單版仍在 50 以內', () => {
+    for (const id of ['1b-by5', '1b-by10']) {
+      const level = LEVELS.find((l) => l.id === id)!;
+      expect(levelRange(level, 'easy').max).toBe(50);
+      expect(levelRange(level, 'hard').max).toBe(100);
+    }
   });
 
   it('乘法關卡困難版會往回數', () => {
@@ -183,25 +209,34 @@ describe('天才版', () => {
     }
   });
 
-  const twisted = (r: StepRule) => r.offStart || r.crossEvery;
+  const level = (id: string) => LEVELS.find((l) => l.id === id)!;
 
-  it('每關都混合了原本的規則和至少一種變化', () => {
-    for (const level of LEVELS) {
-      const hard = settingsFor(level, 'hard').rules;
-      const genius = settingsFor(level, 'genius').rules;
-      const hasTwist = genius.some(
-        (r) => twisted(r) || !hard.some((h) => h.step === r.step && h.min === r.min && h.max === r.max),
-      );
-      expect(hasTwist, level.id).toBe(true);
+  it('原本的規則也留著一起混合出題', () => {
+    for (const l of LEVELS) {
+      const genius = settingsFor(l, 'genius').rules;
+      for (const h of settingsFor(l, 'hard').rules) expect(genius, l.id).toContainEqual(h);
     }
   });
 
-  it('不從倍數開始：2、5、10 個一數會出現，乘法關卡不會', () => {
-    const by5 = [...samples(LEVELS.find((l) => l.id === '1b-by5')!, 'genius')];
-    expect(by5.some((q) => q.terms[0]! % 5 !== 0)).toBe(true);
-    for (const level of LEVELS.filter((l) => l.id.startsWith('2a-times'))) {
-      for (const q of samples(level, 'genius')) expect(q.terms[0]! % Math.abs(q.step)).toBe(0);
+  it('不從倍數開始：一年級只有百數表挑戰，二年級的 2、5、100 個一數會出現，乘法關卡不會', () => {
+    expect(LEVELS.filter((l) => l.grade === 1 && geniusTwists(l).offStart).map((l) => l.id)).toEqual(['1b-chart']);
+    for (const id of ['1b-by2', '1b-by5']) {
+      for (const q of samples(level(id), 'genius')) expect(q.terms[0]! % Math.abs(q.step), id).toBe(0);
     }
+    expect([...samples(level('1b-chart'), 'genius')].some((q) => q.terms[0]! % 5 !== 0 && Math.abs(q.step) === 5)).toBe(true);
+    expect(geniusTwists(level('2b-mix')).offStart).toBe(true);
+    for (const l of LEVELS.filter((l) => l.id.startsWith('2a-times'))) {
+      expect(geniusTwists(l).offStart, l.id).toBe(false);
+      for (const q of samples(l, 'genius')) expect(q.terms[0]! % Math.abs(q.step)).toBe(0);
+    }
+  });
+
+  it('範圍裡沒有整十可以跨的關卡，不加「跨過」', () => {
+    for (const id of ['1a-to10', '1a-back']) {
+      expect(geniusTwists(level(id)), id).toEqual({ offStart: false, crossTens: false, crossHundreds: false, descending: false });
+      for (const rule of settingsFor(level(id), 'genius').rules) expect(rule.crossEvery, id).toBeUndefined();
+    }
+    expect(geniusTwists(level('1a-to30')).crossTens).toBe(true);
   });
 
   it('往回數只加在二年級', () => {
@@ -211,6 +246,20 @@ describe('天才版', () => {
     }
     const mix = [...samples(LEVELS.find((l) => l.id === '2b-by100')!, 'genius')];
     expect(mix.some((q) => q.step < 0)).toBe(true);
+  });
+
+  it('說明文字依實際有的變化產生', () => {
+    const term = (g: number, s: number) => LEVELS.filter((l) => l.grade === g && l.semester === s);
+    expect(describeGenius(term(1, 1))).toBe('一律 3 個空格，有些題目還會跨過整十');
+    expect(describeGenius(term(1, 2))).toBe('一律 3 個空格，有些題目還會不從倍數開始、跨過整十');
+    expect(describeGenius(term(2, 2))).toContain('往回數');
+    expect(describeGenius(term(2, 2))).toContain('不從倍數開始');
+    expect(describeGenius([level('1a-to10')])).toBe('一律 3 個空格');
+    for (const g of [1, 2]) {
+      for (const s of [1, 2]) {
+        if (g === 1) expect(describeGenius(term(g, s))).not.toMatch(/整百|往回數/);
+      }
+    }
   });
 
   it('會出現跨過整十、整百的數列', () => {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { LEVELS, MODES, MODE_NAMES, isPlayable, starsKey, type Level, type Mode } from '@kidstudy/game-core';
+import { LEVELS, MODES, MODE_NAMES, describeGenius, isPlayable, starsKey, type Level, type Mode } from '@kidstudy/game-core';
 import Capybara from './Capybara.vue';
 import StarRow from './StarRow.vue';
 import { progress, settings, type TermKey } from '../store';
@@ -25,11 +25,18 @@ const levels = computed(() =>
   LEVELS.filter((level) => `${level.grade}-${level.semester}` === settings.term),
 );
 
-const MODE_HELP: Record<Mode, { desc: string; locked: string }> = {
-  easy: { desc: '5 個數、1 個空格', locked: '前一關拿到星星就能玩' },
-  hard: { desc: '7～8 個數、2～3 個空格', locked: '簡單版拿到 2 顆星就能玩' },
-  genius: { desc: '3 個空格，還會不從倍數開始、跨過整百、往回數', locked: '困難版拿到 2 顆星就能玩' },
+const MODE_LOCKED: Record<Mode, string> = {
+  easy: '前一關拿到星星就能玩',
+  hard: '簡單版拿到 2 顆星就能玩',
+  genius: '困難版拿到 2 顆星就能玩',
 };
+
+/** 難度說明；天才版依這學期的關卡實際有的變化產生（例如一年級不會跨過整百） */
+const modeHelp = computed(() => {
+  if (settings.mode === 'easy') return '5 個數、1 個空格';
+  if (settings.mode === 'hard') return '7～8 個數、2～3 個空格';
+  return describeGenius(levels.value);
+});
 
 const stops = computed(() =>
   levels.value.map((level, i) => {
@@ -124,7 +131,7 @@ const termStars = computed(() => stops.value.reduce((sum, s) => sum + s.stars, 0
       {{ MODE_NAMES[mode] }}
     </button>
   </div>
-  <p class="mode-help">{{ MODE_HELP[settings.mode].desc }}</p>
+  <p class="mode-help">{{ modeHelp }}</p>
 
   <p class="summary">
     {{ termLabel }}・{{ MODE_NAMES[settings.mode] }}版・已經拿到
@@ -158,7 +165,7 @@ const termStars = computed(() => stops.value.reduce((sum, s) => sum + s.stars, 0
       <div class="label">
         <span class="title">{{ stop.level.title }}</span>
         <StarRow v-if="stop.played" :count="stop.stars" />
-        <span v-else class="desc">{{ stop.unlocked ? stop.level.description : MODE_HELP[settings.mode].locked }}</span>
+        <span v-else class="desc">{{ stop.unlocked ? stop.level.description : MODE_LOCKED[settings.mode] }}</span>
       </div>
     </div>
 

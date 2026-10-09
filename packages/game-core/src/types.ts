@@ -49,6 +49,11 @@ export interface Level {
   hard?: {
     rules?: StepRule[];
     length?: number;
+    /**
+     * 天才版能不能「不從倍數開始」。沒寫時二年級可以、一年級不行：
+     * 一年級的 2、5 個一數不從倍數開始會用到二位數進位加法（一下後期才教），只開放給百數表之後的關卡
+     */
+    geniusOffStart?: boolean;
   };
 }
 

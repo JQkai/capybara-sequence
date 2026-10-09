@@ -28,6 +28,8 @@ export const LEVELS: Level[] = [
     description: '1 個一數，往上數',
     curriculum: ['N-1-1'],
     rules: [{ step: 1, min: 1, max: 10 }],
+    // 10 以內排 8 個數只有 3 種數列，孩子容易背起來；困難、天才版改成 7 個數並可以從 0 開始（一上已學「認識 0」），共 5 種
+    hard: { rules: [{ step: 1, min: 0, max: 10 }], length: 7 },
     length: 5,
     types: BOTH,
     choiceCount: 3,
@@ -41,6 +43,8 @@ export const LEVELS: Level[] = [
     description: '10 以內，1 個一數往回數',
     curriculum: ['N-1-1'],
     rules: [{ step: -1, min: 1, max: 10 }],
+    // 同「數到 10」：困難、天才版 7 個數、可以數到 0，共 5 種數列
+    hard: { rules: [{ step: -1, min: 0, max: 10 }], length: 7 },
     length: 5,
     types: BOTH,
     choiceCount: 3,
@@ -81,6 +85,8 @@ export const LEVELS: Level[] = [
     description: '5、10、15……五個五個數到 50',
     curriculum: ['N-1-1'],
     rules: [{ step: 5, min: 5, max: 50, startMultiple: true }],
+    // 50 以內排 8 個數只有 3 種數列；困難、天才版放寬到 100 以內（康軒一下第 11 週學到 100），約 13 種
+    hard: { rules: [{ step: 5, min: 5, max: 100, startMultiple: true }] },
     length: 5,
     types: BOTH,
     choiceCount: 3,
@@ -117,6 +123,8 @@ export const LEVELS: Level[] = [
       { step: -1, min: 1, max: 100 },
       { step: -10, min: 1, max: 100 },
     ],
+    // 已經學到百數表，天才版可以不從倍數開始（例如從 3 開始 5 個一數，就是百數表上的一直行）
+    hard: { geniusOffStart: true },
     length: 5,
     types: BOTH,
     choiceCount: 3,

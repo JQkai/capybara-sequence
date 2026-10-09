@@ -3,6 +3,8 @@ export { createRng, type Rng } from './rng';
 export { LEVELS, getLevel } from './levels';
 export {
   BLANK_COUNTS,
+  describeGenius,
+  geniusTwists,
   generateQuestion,
   generateRound,
   levelRange,
@@ -11,6 +13,7 @@ export {
   startCandidates,
   validBlanks,
   validateLevel,
+  type GeniusTwists,
   type ModeSettings,
   type QuestionOptions,
   type RoundOptions,
