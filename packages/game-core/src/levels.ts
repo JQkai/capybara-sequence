@@ -1,0 +1,271 @@
+import type { Level, QuestionType, StepRule } from './types';
+
+const BOTH: QuestionType[] = ['next', 'fill'];
+
+/** 九九乘法某幾段的數列，例如 2 的乘法：2、4、6……18 */
+function timesRules(factors: number[], descending = false): StepRule[] {
+  return factors.flatMap((n) => {
+    const up: StepRule = { step: n, min: n, max: 9 * n, startMultiple: true, times: true };
+    return descending ? [up, { ...up, step: -n }] : [up];
+  });
+}
+
+/**
+ * 一、二年級的關卡，依教材進度排列。
+ * 課綱依據：N-1-1 一百以內的數、N-2-1 一千以內的數（熟練「十個一數」「百個一數」，
+ * 能從某數開始前後數數）、N-2-6/N-2-7 乘法。
+ * 教材依據：康軒一上「排數字」（10 以內的前後關係）、一下先在 50 以內練「2 個、5 個、10 個一數」，
+ * 之後才「往上數到 100、從 100 往下數」、百數表；二上依段次學九九乘法（康軒先 2、5 再 4、8，
+ * 之後 3、6、9、7；翰林 3、6、7、9）。
+ */
+export const LEVELS: Level[] = [
+  // ── 一年級上學期 ──
+  {
+    id: '1a-to10',
+    grade: 1,
+    semester: 1,
+    title: '數到 10',
+    description: '1 個一數，往上數',
+    curriculum: ['N-1-1'],
+    rules: [{ step: 1, min: 1, max: 10 }],
+    length: 5,
+    types: BOTH,
+    choiceCount: 3,
+    blankFirst: false,
+  },
+  {
+    id: '1a-back',
+    grade: 1,
+    semester: 1,
+    title: '倒著數',
+    description: '10 以內，1 個一數往回數',
+    curriculum: ['N-1-1'],
+    rules: [{ step: -1, min: 1, max: 10 }],
+    length: 5,
+    types: BOTH,
+    choiceCount: 3,
+    blankFirst: false,
+  },
+  {
+    id: '1a-to30',
+    grade: 1,
+    semester: 1,
+    title: '數到 30',
+    description: '1 個一數，一路數到 30',
+    curriculum: ['N-1-1'],
+    rules: [{ step: 1, min: 1, max: 30 }],
+    length: 5,
+    types: BOTH,
+    choiceCount: 3,
+    blankFirst: false,
+  },
+  // ── 一年級下學期 ──
+  {
+    id: '1b-by2',
+    grade: 1,
+    semester: 2,
+    title: '2 個一數',
+    description: '2、4、6……兩個兩個數到 50',
+    curriculum: ['N-1-1'],
+    rules: [{ step: 2, min: 2, max: 50, startMultiple: true }],
+    length: 5,
+    types: BOTH,
+    choiceCount: 3,
+    blankFirst: false,
+  },
+  {
+    id: '1b-by5',
+    grade: 1,
+    semester: 2,
+    title: '5 個一數',
+    description: '5、10、15……五個五個數到 50',
+    curriculum: ['N-1-1'],
+    rules: [{ step: 5, min: 5, max: 50, startMultiple: true }],
+    length: 5,
+    types: BOTH,
+    choiceCount: 3,
+    blankFirst: false,
+  },
+  {
+    id: '1b-by10',
+    grade: 1,
+    semester: 2,
+    title: '10 個一數',
+    description: '10、20、30……十個十個數到 50，也能從別的數開始',
+    curriculum: ['N-1-1'],
+    // 50 以內只從 10 的倍數開始的話，只有 10～50 一種數列，所以也從 0～9 開始
+    rules: [{ step: 10, min: 0, max: 50 }],
+    length: 5,
+    types: BOTH,
+    choiceCount: 3,
+    blankFirst: false,
+  },
+  {
+    id: '1b-chart',
+    grade: 1,
+    semester: 2,
+    title: '百數表挑戰',
+    description: '100 以內，1、2、5、10 個一數，也要往回數',
+    curriculum: ['N-1-1'],
+    rules: [
+      { step: 1, min: 1, max: 100 },
+      { step: 2, min: 2, max: 100, startMultiple: true },
+      { step: 5, min: 5, max: 100, startMultiple: true },
+      { step: 10, min: 1, max: 100 },
+      { step: -1, min: 1, max: 100 },
+      { step: -10, min: 1, max: 100 },
+    ],
+    length: 5,
+    types: BOTH,
+    choiceCount: 3,
+    blankFirst: true,
+  },
+  // ── 二年級上學期 ──
+  {
+    id: '2a-to200',
+    grade: 2,
+    semester: 1,
+    title: '數到 200',
+    description: '跨過整十、整百繼續數，也要往回數',
+    curriculum: ['N-2-1'],
+    rules: [
+      { step: 1, min: 1, max: 200, crossEvery: 10 },
+      { step: 1, min: 1, max: 200, crossEvery: 100 },
+      { step: -1, min: 1, max: 200, crossEvery: 10 },
+      { step: 10, min: 1, max: 200 },
+      { step: -10, min: 1, max: 200 },
+    ],
+    length: 5,
+    types: BOTH,
+    choiceCount: 4,
+    blankFirst: true,
+  },
+  {
+    id: '2a-times-25',
+    grade: 2,
+    semester: 1,
+    title: '2 和 5 的乘法',
+    description: '照著乘法的數往上數',
+    curriculum: ['N-2-6', 'N-2-7'],
+    rules: timesRules([2, 5]),
+    length: 5,
+    types: BOTH,
+    choiceCount: 4,
+    blankFirst: true,
+  },
+  {
+    id: '2a-times-48',
+    grade: 2,
+    semester: 1,
+    title: '4 和 8 的乘法',
+    description: '照著乘法的數往上數',
+    curriculum: ['N-2-6', 'N-2-7'],
+    rules: timesRules([4, 8]),
+    length: 5,
+    types: BOTH,
+    choiceCount: 4,
+    blankFirst: true,
+  },
+  {
+    id: '2a-times-36',
+    grade: 2,
+    semester: 1,
+    title: '3 和 6 的乘法',
+    description: '照著乘法的數往上數',
+    curriculum: ['N-2-6', 'N-2-7'],
+    rules: timesRules([3, 6]),
+    length: 5,
+    types: BOTH,
+    choiceCount: 4,
+    blankFirst: true,
+  },
+  {
+    id: '2a-times-79',
+    grade: 2,
+    semester: 1,
+    title: '7 和 9 的乘法',
+    description: '照著乘法的數往上數',
+    curriculum: ['N-2-6', 'N-2-7'],
+    rules: timesRules([7, 9]),
+    length: 5,
+    types: BOTH,
+    choiceCount: 4,
+    blankFirst: true,
+  },
+  {
+    id: '2a-times-all',
+    grade: 2,
+    semester: 1,
+    title: '乘法大挑戰',
+    description: '2 到 9 的乘法都有，還要往回數的挑戰題！',
+    curriculum: ['N-2-6', 'N-2-7'],
+    // 課本沒有教乘法往回數，這關是給學完九九乘法的孩子的挑戰
+    rules: timesRules([2, 3, 4, 5, 6, 7, 8, 9], true),
+    length: 5,
+    types: BOTH,
+    choiceCount: 4,
+    blankFirst: true,
+  },
+  // ── 二年級下學期 ──
+  {
+    id: '2b-by100',
+    grade: 2,
+    semester: 2,
+    title: '100 個一數',
+    description: '100、200、300……也能從別的數開始',
+    curriculum: ['N-2-1'],
+    rules: [
+      { step: 100, min: 100, max: 1000, startMultiple: true },
+      { step: 100, min: 1, max: 1000 },
+      { step: -100, min: 1, max: 1000 },
+    ],
+    length: 5,
+    types: BOTH,
+    choiceCount: 4,
+    blankFirst: true,
+  },
+  {
+    id: '2b-cross',
+    grade: 2,
+    semester: 2,
+    title: '跨過整百',
+    description: '1 個一數、10 個一數，跨過整百',
+    curriculum: ['N-2-1'],
+    rules: [
+      { step: 1, min: 1, max: 1000, crossEvery: 100 },
+      { step: -1, min: 1, max: 1000, crossEvery: 100 },
+      { step: 10, min: 1, max: 1000, crossEvery: 100 },
+      { step: -10, min: 1, max: 1000, crossEvery: 100 },
+    ],
+    length: 5,
+    types: BOTH,
+    choiceCount: 4,
+    blankFirst: true,
+  },
+  {
+    id: '2b-mix',
+    grade: 2,
+    semester: 2,
+    title: '一千以內大挑戰',
+    description: '1、2、5、10、100 個一數，往上、往回都有',
+    curriculum: ['N-2-1'],
+    rules: [
+      { step: 1, min: 1, max: 1000 },
+      { step: -1, min: 1, max: 1000 },
+      { step: 2, min: 2, max: 1000, startMultiple: true },
+      { step: 5, min: 5, max: 1000, startMultiple: true },
+      { step: 10, min: 1, max: 1000 },
+      { step: -10, min: 1, max: 1000 },
+      { step: 100, min: 1, max: 1000 },
+      { step: -100, min: 1, max: 1000 },
+    ],
+    length: 5,
+    types: BOTH,
+    choiceCount: 4,
+    blankFirst: true,
+  },
+];
+
+export function getLevel(id: string): Level | undefined {
+  return LEVELS.find((level) => level.id === id);
+}

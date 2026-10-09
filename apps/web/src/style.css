@@ -1,0 +1,93 @@
+:root {
+  color-scheme: light;
+  /* 卡皮巴拉的棕色、柚子的橘色、溫泉石頭的灰色 */
+  --bg: #fbf4e9;
+  --surface: #ffffff;
+  --text: #3a2a1c;
+  --text-soft: #7a6553;
+  --primary: #8f6236;
+  --primary-dark: #6b4626;
+  --primary-soft: #f3e6d6;
+  --accent: #f4a62a;
+  --accent-soft: #fff0d2;
+  --stone: #ebe6de;
+  --stone-edge: #b7ab9a;
+  --correct: #3f9a6b;
+  --correct-soft: #dff2e6;
+  --wrong: #d9573f;
+  --wrong-soft: #fde3dc;
+  --border: #ead9c4;
+  --radius: 18px;
+  --shadow: 0 3px 0 rgba(58, 42, 28, 0.12);
+
+  font-family: 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  /* 避免平板上連點放大、長按選字 */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.btn {
+  min-height: 52px;
+  padding: 10px 22px;
+  border: none;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  box-shadow: 0 4px 0 var(--primary-dark);
+  transition: transform 0.08s;
+}
+
+.btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--primary-dark);
+}
+
+.btn.secondary {
+  background: var(--surface);
+  color: var(--primary-dark);
+  border: 2px solid var(--border);
+  box-shadow: 0 4px 0 var(--border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

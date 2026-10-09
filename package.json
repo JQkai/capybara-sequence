@@ -1,0 +1,17 @@
+{
+  "name": "kidstudy",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @kidstudy/web",
+    "build": "npm run build -w @kidstudy/web",
+    "test": "npm test -w @kidstudy/game-core",
+    "typecheck": "npm run typecheck --workspaces"
+  },
+  "overrides": {
+    "typescript": "~5.9.3"
+  }
+}
