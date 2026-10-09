@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import type { Level } from '@kidstudy/game-core';
-import LevelSelect from './components/LevelSelect.vue';
+import MapView from './components/MapView.vue';
 import PlayRound from './components/PlayRound.vue';
 
 const current = ref<Level | null>(null);
@@ -9,8 +9,14 @@ const current = ref<Level | null>(null);
 
 <template>
   <main class="app">
-    <PlayRound v-if="current" :key="current.id" :level="current" @exit="current = null" />
-    <LevelSelect v-else @select="current = $event" />
+    <PlayRound
+      v-if="current"
+      :key="current.id"
+      :level="current"
+      @exit="current = null"
+      @play="current = $event"
+    />
+    <MapView v-else @select="current = $event" />
   </main>
 </template>
 

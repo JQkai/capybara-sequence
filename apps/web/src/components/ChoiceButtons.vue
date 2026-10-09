@@ -4,11 +4,13 @@ const props = defineProps<{
   answer: number;
   picked: number | null;
   status: 'answering' | 'correct' | 'wrong';
+  /** 已經選錯的選項：再試一次時不能再選 */
+  eliminated: number[];
 }>();
 const emit = defineEmits<{ choose: [value: number] }>();
 
 function stateOf(choice: number): string {
-  if (props.status === 'answering') return '';
+  if (props.status === 'answering') return props.eliminated.includes(choice) ? 'crossed' : '';
   if (choice === props.answer) return 'correct';
   return choice === props.picked ? 'wrong' : 'dim';
 }
@@ -22,7 +24,7 @@ function stateOf(choice: number): string {
       type="button"
       class="choice"
       :class="stateOf(choice)"
-      :disabled="status !== 'answering'"
+      :disabled="status !== 'answering' || eliminated.includes(choice)"
       @click="emit('choose', choice)"
     >
       {{ choice }}
@@ -76,5 +78,12 @@ function stateOf(choice: number): string {
 
 .dim {
   opacity: 0.45;
+}
+
+.crossed {
+  opacity: 0.4;
+  text-decoration: line-through;
+  text-decoration-thickness: 3px;
+  border-style: dashed;
 }
 </style>

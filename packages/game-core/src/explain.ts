@@ -15,17 +15,26 @@ export interface Explanation {
 }
 
 /** 從 from 加上 diff 得到 to，說成「15 再多 5 是 20」或「比 50 少 10 是 40」 */
-function describeStep(from: number, diff: number, to: number): string {
-  return diff > 0 ? `${from} 再多 ${diff} 是 ${to}` : `比 ${from} 少 ${-diff} 是 ${to}`;
+function describeStep(from: number, diff: number, to: number | string): string {
+  // 數字前後留空格（「是 20」），文字不留（「是多少」）
+  const target = typeof to === 'number' ? ` ${to}` : to;
+  return diff > 0 ? `${from} 再多 ${diff} 是${target}` : `比 ${from} 少 ${-diff} 是${target}`;
+}
+
+/**
+ * 從空格旁邊看得到的數往空格推：空格前面有數就從前一個往後推，空格在第一個就從第二個往回推。
+ * to 傳答案就是說明，傳「多少」就是引導孩子自己算的提示。
+ */
+export function reasonFor(question: Question, to: number | string): string {
+  const { terms, blankIndex, step } = question;
+  return blankIndex > 0
+    ? describeStep(terms[blankIndex - 1]!, step, to)
+    : describeStep(terms[1]!, -step, to);
 }
 
 export function explain(question: Question): Explanation {
-  const { terms, blankIndex, answer, step, timesOf } = question;
-  // 從空格旁邊看得到的數往空格推：空格前面有數就從前一個往後推，空格在第一個就從第二個往回推
-  const reason =
-    blankIndex > 0
-      ? describeStep(terms[blankIndex - 1]!, step, answer)
-      : describeStep(terms[1]!, -step, answer);
+  const { answer, step, timesOf } = question;
+  const reason = reasonFor(question, answer);
   return {
     rule: describeRule(step),
     reason,
