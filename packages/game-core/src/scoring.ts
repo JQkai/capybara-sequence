@@ -30,6 +30,15 @@ export function starsFor(results: QuestionResult[]): number {
   return 0;
 }
 
+/**
+ * 自由模式答完一題後的連續答對次數：
+ * 第一次就答對才加 1；第二次才答對不中斷、也不加（選擇題亂猜兩次有一半機會答對，不能算）；答錯歸零。
+ */
+export function freeStreakAfter(streak: number, result: QuestionResult): number {
+  if (!result.correct) return 0;
+  return result.attempts === 1 ? streak + 1 : streak;
+}
+
 export const MODES: Mode[] = ['easy', 'hard', 'genius'];
 
 export const MODE_NAMES: Record<Mode, string> = { easy: '簡單', hard: '困難', genius: '天才' };

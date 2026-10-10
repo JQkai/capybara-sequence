@@ -9,6 +9,7 @@ import {
   createRng,
   customSettings,
   describeSpec,
+  freeStreakAfter,
   explain,
   freeUnique,
   generateFreeQuestion,
@@ -232,18 +233,87 @@ describe('說說規律的提示', () => {
         q.terms.slice(1).map((t, i) => (t - q.terms[i]! >= 0 ? `+${t - q.terms[i]!}` : `−${q.terms[i]! - t}`)),
       );
       const m = hint.guide.match(/^試試「(.+)」：照它算，第 (\d+) 個應該是 (-?[\d.]+)，可是這裡是 (\d+)，所以不是它。$/);
-      expect(m, hint.guide).toBeTruthy();
-      const [, option, nth, expected, actual] = m!;
+      if (!m) {
+        // 每個錯誤選項算出來的數都太大或不是整數時，改用一般的說法
+        expect(hint.guide).toBe(hint.rule);
+        continue;
+      }
+      const [, option, nth, expected, actual] = m;
       // 拿來示範的一定是錯誤選項，而且「這裡是」說的數真的是那一顆
       expect(option).not.toBe(q.free!.ruleAnswer);
       expect(q.free!.ruleOptions).toContain(option);
       expect(Number(actual)).toBe(q.terms[Number(nth) - 1]);
       expect(Number(expected)).not.toBe(Number(actual));
+      // 算出來的數要是 1000 以內的整數，孩子才看得懂
+      expect(Number.isInteger(Number(expected)) && Number(expected) >= 0 && Number(expected) <= 1000, hint.guide).toBe(true);
     }
   });
 });
 
+describe('說說規律的選項', () => {
+  const rules = [...samples(FREE_PRESETS.genius.settings, 1500, ['rule'])];
+
+  it('輪流加的說明寫清楚先後；不會出現同一組數字順序對調的選項', () => {
+    const parse = (text: string) => {
+      const m = text.match(/^先(加|減) (\d+)，再(加|減) (\d+)，輪流$/);
+      return m ? [(m[1] === '加' ? 1 : -1) * Number(m[2]), (m[3] === '加' ? 1 : -1) * Number(m[4])].sort().join() : null;
+    };
+    let alternates = 0;
+    for (const q of rules) {
+      if (q.free!.spec.family !== 'alternate') continue;
+      alternates++;
+      expect(q.free!.ruleAnswer).toMatch(/^先.+，再.+，輪流$/);
+      const answer = parse(q.free!.ruleAnswer!);
+      for (const o of q.free!.ruleOptions!) {
+        if (o !== q.free!.ruleAnswer) expect(parse(o), `${o}／${q.free!.ruleAnswer}`).not.toBe(answer);
+      }
+    }
+    expect(alternates).toBeGreaterThan(0);
+  });
+
+  it('錯誤選項的數字不會比數列的差大很多', () => {
+    for (const q of rules) {
+      const maxDiff = Math.max(...q.terms.slice(1).map((t, i) => Math.abs(t - q.terms[i]!)));
+      for (const d of q.free!.ruleDistractors!) {
+        if (d.family === 'growing') expect(Math.abs(d.params[0]!), describeSpec(d, q.terms)).toBeLessThanOrEqual(maxDiff / 2);
+        if (['arith', 'alternate', 'interleave'].includes(d.family)) {
+          for (const p of d.params) expect(Math.abs(p), describeSpec(d, q.terms)).toBeLessThanOrEqual(maxDiff * 2);
+        }
+      }
+    }
+  });
+});
+
+describe('連續答對', () => {
+  it('第一次答對才加 1；第二次才答對不加也不中斷；答錯歸零', () => {
+    expect(freeStreakAfter(3, { correct: true, attempts: 1, hintsUsed: 0 })).toBe(4);
+    expect(freeStreakAfter(3, { correct: true, attempts: 1, hintsUsed: 2 })).toBe(4);
+    expect(freeStreakAfter(3, { correct: true, attempts: 2, hintsUsed: 1 })).toBe(3);
+    expect(freeStreakAfter(3, { correct: false, attempts: 2, hintsUsed: 1 })).toBe(0);
+  });
+});
+
 describe('自由模式設定', () => {
+  it('每個預設難度都標了建議年級', () => {
+    for (const p of Object.values(FREE_PRESETS)) expect(p.grades).toMatch(/^建議 .*年級/);
+  });
+
+  it('自訂的每一種組合，出的題目都符合勾選的規律和範圍（不會退回沒勾的等差）', () => {
+    const groups = Object.keys(FAMILY_GROUPS) as (keyof typeof FAMILY_GROUPS)[];
+    for (let mask = 1; mask < 16; mask++) {
+      const gs = groups.filter((_, i) => mask & (1 << i));
+      for (const max of [100, 1000] as const) {
+        for (const blanks of [1, 2, 3]) {
+          const settings = customSettings({ groups: gs, max, blanks, types: FREE_TYPES });
+          for (const q of samples(settings, 40)) {
+            expect(settings.families, `${gs}／${max}／${blanks} 格`).toContain(q.free!.spec.family);
+            expect(Math.max(...q.terms)).toBeLessThanOrEqual(max);
+          }
+        }
+      }
+    }
+  });
+
   it('天才預設會出現所有規律', () => {
     const seen = new Set([...samples(FREE_PRESETS.genius.settings, 600)].map((q) => q.free!.spec.family));
     expect(seen).toEqual(new Set(ALL_FAMILIES));

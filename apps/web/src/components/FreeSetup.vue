@@ -45,11 +45,15 @@ const customReady = computed(() => custom.groups.length > 0 && custom.types.leng
     <Capybara :size="72" class="mascot" />
     <h1>自由模式</h1>
     <p>不分年級，挑戰更多種規律（數字都在 1000 以內）</p>
+    <p class="rule-note">第一次就答對才算「連續答對」</p>
   </section>
 
   <section class="presets" aria-label="選擇難度">
     <button v-for="[id, preset] in presets" :key="id" type="button" class="preset" :class="id" @click="emit('start', id)">
-      <span class="name">{{ preset.name }}</span>
+      <span class="name">
+        {{ preset.name }}
+        <span class="grades">{{ preset.grades }}</span>
+      </span>
       <span class="desc">{{ preset.description }}</span>
       <span class="best">最高連續答對 {{ progress.freeBest[id] ?? 0 }} 題</span>
     </button>
@@ -192,6 +196,21 @@ h1 {
   font-size: 1.25rem;
   font-weight: 800;
   color: var(--primary-dark);
+}
+
+.grades {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.rule-note {
+  margin-top: 4px !important;
+  font-size: 0.85rem;
 }
 
 .desc {

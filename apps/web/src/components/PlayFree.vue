@@ -5,6 +5,7 @@ import {
   FREE_PRESETS,
   createRng,
   customSettings,
+  freeStreakAfter,
   generateFreeQuestion,
   type Question,
   type QuestionResult,
@@ -25,22 +26,22 @@ const rng = createRng(Date.now());
 const question = ref<Question>(generateFreeQuestion(rng, freeSettings.value));
 /** 第幾題，換題時讓 QuestionCard 重新建立 */
 const count = ref(1);
-/** 連續答對幾題（第二次才答對也算） */
+/** 連續答對幾題（只算第一次就答對的；見 freeStreakAfter） */
 const streak = ref(0);
+/** 這題第二次才答對：連續答對不加也不中斷，畫面上說明一下 */
+const secondTry = ref(false);
 /** 這次是不是打破了最高紀錄 */
 const newBest = ref(false);
 const best = computed(() => progress.freeBest[props.freeKey] ?? 0);
 
 function onResult(result: QuestionResult) {
-  if (result.correct) {
-    streak.value++;
-    if (recordFreeStreak(props.freeKey, streak.value)) newBest.value = true;
-  } else {
-    streak.value = 0;
-  }
+  streak.value = freeStreakAfter(streak.value, result);
+  secondTry.value = result.correct && result.attempts > 1;
+  if (recordFreeStreak(props.freeKey, streak.value)) newBest.value = true;
 }
 
 function next() {
+  secondTry.value = false;
   question.value = generateFreeQuestion(rng, freeSettings.value);
   count.value++;
 }
@@ -58,6 +59,7 @@ function next() {
       <span class="best" :class="{ record: newBest }">{{ newBest ? '新紀錄！' : '最高' }} {{ best }} 題</span>
     </div>
   </header>
+  <p v-if="secondTry" class="note" aria-live="polite">第二次才答對，連續答對的題數不增加，也不會中斷</p>
 
   <QuestionCard
     :key="count"
@@ -115,6 +117,13 @@ h1 {
 
 .best {
   font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.note {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 0.9rem;
   color: var(--text-soft);
 }
 

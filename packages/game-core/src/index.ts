@@ -51,6 +51,7 @@ export {
   MAX_ATTEMPTS,
   MODES,
   MODE_NAMES,
+  freeStreakAfter,
   questionPoints,
   starsFor,
   starsKey,

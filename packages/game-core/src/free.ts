@@ -67,7 +67,8 @@ export function describeSpec(spec: PatternSpec, terms?: number[]): string {
     case 'arith':
       return `每次${signed('多', x)}`;
     case 'alternate':
-      return `${signed('加', x)}、${signed('加', y)} 輪流`;
+      // 寫清楚先後，否則「減 100、加 51 輪流」和「加 51、減 100 輪流」對孩子來說是同一件事
+      return `先${signed('加', x)}，再${signed('加', y)}，輪流`;
     case 'growing':
       return x > 0 ? `每次多的數，一次比一次多 ${x}` : `每次多的數，一次比一次少 ${-x}`;
     case 'multiply':
@@ -119,13 +120,16 @@ function expectedAt(spec: PatternSpec, terms: number[], i: number): number | nul
   }
 }
 
-/** 說說規律的第 3 層提示：拿一個錯誤選項，照它算到第一個對不上的地方 */
+/**
+ * 說說規律的第 3 層提示：拿一個錯誤選項，照它算到第一個對不上的地方。
+ * 算出來的數要是 0～1000 的整數，否則孩子看不懂（例如「應該是 1256」「應該是 7.5」），改用別的選項示範。
+ */
 function mismatchHint(spec: PatternSpec, terms: number[]): string | null {
   for (let i = 1; i < terms.length; i++) {
     const expected = expectedAt(spec, terms, i);
-    if (expected !== null && expected !== terms[i]) {
-      return `試試「${describeSpec(spec, terms)}」：照它算，第 ${i + 1} 個應該是 ${expected}，可是這裡是 ${terms[i]}，所以不是它。`;
-    }
+    if (expected === null || expected === terms[i]) continue;
+    if (!Number.isInteger(expected) || expected < 0 || expected > 1000) return null;
+    return `試試「${describeSpec(spec, terms)}」：照它算，第 ${i + 1} 個應該是 ${expected}，可是這裡是 ${terms[i]}，所以不是它。`;
   }
   return null;
 }
@@ -521,14 +525,18 @@ export const QUESTION_TYPE_NAMES: Record<QuestionType, string> = {
   rule: '說說規律',
 };
 
-export const FREE_PRESETS: Record<FreePresetId, { name: string; description: string; settings: FreeSettings }> = {
+/** 每個預設難度用到的計算，對照課綱大約適合的年級，顯示在卡片上讓家長、老師參考 */
+export const FREE_PRESETS: Record<FreePresetId, { name: string; grades: string; description: string; settings: FreeSettings }> = {
   warm: {
     name: '暖身',
+    grades: '建議 1～2 年級',
     description: '每次多（或少）一樣的數，100 以內',
     settings: { families: ['arith'], max: 100, maxStep: 10, lengths: [6, 6], blanks: [1, 1], types: FREE_TYPES },
   },
   challenge: {
     name: '挑戰',
+    // 三位數加減、連續退位，數列（R-3-2）
+    grades: '建議 2～3 年級',
     description: '差可以到 50，還有兩個數輪流加，1000 以內',
     settings: {
       families: ['arith', 'alternate'],
@@ -541,6 +549,8 @@ export const FREE_PRESETS: Record<FreePresetId, { name: string; description: str
   },
   brain: {
     name: '燒腦',
+    // 三位數乘以一位數（N-3-3）、除以一位數（N-3-5）、數量模式（R-3-2、R-4-4）
+    grades: '建議 3～4 年級',
     description: '再加上差越來越大、乘幾倍、變一半',
     settings: {
       families: ['arith', 'alternate', 'growing', 'multiply', 'halve'],
@@ -553,6 +563,8 @@ export const FREE_PRESETS: Record<FreePresetId, { name: string; description: str
   },
   genius: {
     name: '天才',
+    // 二位數乘二位數（N-4-2）、兩步驟併式（R-4-1）
+    grades: '建議 4 年級以上',
     description: '所有規律都會出現，還有乘 2 再加 1、前兩個數加起來、平方數',
     settings: { families: ALL_FAMILIES, max: 1000, maxStep: 100, lengths: [8, 8], blanks: [2, 3], types: FREE_TYPES },
   },
@@ -624,7 +636,7 @@ function ruleDistractors(spec: PatternSpec, terms: number[], rng: Rng): PatternS
   const multiply = (r: number): PatternSpec => ({ family: 'multiply', params: [r] });
   const pools: Record<FamilyId, PatternSpec[]> = {
     arith: [arith(x + 1), arith(x - 1), arith(-x), arith(x * 2), growing(1), multiply(2), { family: 'alternate', params: [x, x + 2] }],
-    alternate: [arith(d0), arith(d1), arith(d0 + d1), { family: 'alternate', params: [y, x] }, growing(Math.abs(d1 - d0) || 1)],
+    alternate: [arith(d0), arith(d1), arith(d0 + d1), { family: 'alternate', params: [x, -y] }, growing(Math.abs(d1 - d0) || 1)],
     growing: [arith(d0), arith(d1), growing(x + 1), growing(Math.max(1, x - 1)), multiply(2), { family: 'fibonacci', params: [] }],
     multiply: [arith(d0), multiply(x + 1), growing(Math.abs(d1 - d0) || 1), { family: 'affine', params: [x, 1] }, { family: 'square', params: [] }],
     halve: [arith(d0), multiply(2), growing(Math.abs(d1 - d0) || 1), { family: 'fibonacci', params: [] }],
@@ -638,8 +650,20 @@ function ruleDistractors(spec: PatternSpec, terms: number[], rng: Rng): PatternS
   const correct = describeSpec(spec, terms);
   const seen = new Set([correct]);
   const out: PatternSpec[] = [];
+  const maxDiff = Math.max(...terms.slice(1).map((t, i) => Math.abs(t - terms[i]!)));
+  /** 數字比數列的差大很多的選項一看就不對（例如差 100 左右卻說「一次比一次多 151」），不出 */
+  const plausible = (cand: PatternSpec) => {
+    if (cand.family === 'growing') return Math.abs(cand.params[0]!) <= maxDiff / 2;
+    if (['arith', 'alternate', 'interleave'].includes(cand.family)) return cand.params.every((p) => Math.abs(p) <= maxDiff * 2);
+    return true;
+  };
+  /** 同一組數字、順序對調的輪流加，孩子會覺得是同一件事 */
+  const swapped = (cand: PatternSpec) =>
+    spec.family === 'alternate' &&
+    cand.family === 'alternate' &&
+    [...cand.params].sort().join() === [...spec.params].sort().join();
   for (const cand of [...shuffle(rng, pools[spec.family]), ...shuffle(rng, fallback)]) {
-    if (cand.params.some((p) => p === 0)) continue;
+    if (cand.params.some((p) => p === 0) || !plausible(cand) || swapped(cand)) continue;
     const text = describeSpec(cand, terms);
     if (seen.has(text) || specFits(cand, terms)) continue;
     seen.add(text);
@@ -730,12 +754,20 @@ function tryQuestion(type: QuestionType, family: FamilyId, rng: Rng, settings: F
 
 /** 自由模式出一題；題目的答案一定唯一 */
 export function generateFreeQuestion(rng: Rng, settings: FreeSettings): Question {
-  for (let tries = 0; tries < 400; tries++) {
-    const type = pick(rng, settings.types);
-    const family = pick(rng, settings.families);
-    const q = tryQuestion(type, family, rng, settings);
-    if (q) return q;
-  }
+  const attempt = (s: FreeSettings) => {
+    for (let tries = 0; tries < 400; tries++) {
+      const q = tryQuestion(pick(rng, s.types), pick(rng, s.families), rng, s);
+      if (q) return q;
+    }
+    return null;
+  };
+  const q = attempt(settings);
+  if (q) return q;
+  // 設定的長度排不下勾選的規律（例如 100 以內每次乘 2 最多 7 個數，排不了 3 個空格要的 8 個數），
+  // 改用比較短的數列，不要退回孩子沒勾的規律；最短要讓空格以外還有足夠的數看出規律
+  const shortest = Math.max(5, settings.blanks[1] + 3);
+  const relaxed = attempt({ ...settings, lengths: [shortest, settings.lengths[1]] });
+  if (relaxed) return relaxed;
   // 設定太嚴格時，退回最簡單的等差補空格，保證一定出得了題
   for (;;) {
     const q = tryQuestion('fill', 'arith', rng, { ...settings, blanks: [1, 1], lengths: [6, 6] });
