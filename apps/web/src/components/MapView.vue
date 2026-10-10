@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { LEVELS, MODES, MODE_NAMES, describeGenius, isPlayable, starsKey, type Level, type Mode } from '@kidstudy/game-core';
+import { LEVELS, MODES, MODE_NAMES, describeGenius, starsKey, type Level } from '@kidstudy/game-core';
 import Capybara from './Capybara.vue';
 import StarRow from './StarRow.vue';
 import { progress, settings, type TermKey } from '../store';
@@ -25,12 +25,6 @@ const levels = computed(() =>
   LEVELS.filter((level) => `${level.grade}-${level.semester}` === settings.term),
 );
 
-const MODE_LOCKED: Record<Mode, string> = {
-  easy: '前一關拿到星星就能玩',
-  hard: '簡單版拿到 2 顆星就能玩',
-  genius: '困難版拿到 2 顆星就能玩',
-};
-
 /** 難度說明；天才版依這學期的關卡實際有的變化產生（例如一年級不會跨過整百） */
 const modeHelp = computed(() => {
   if (settings.mode === 'easy') return '5 個數、1 個空格';
@@ -48,13 +42,12 @@ const stops = computed(() =>
       y: TOP + i * ROW,
       stars: progress.bestStars[key] ?? 0,
       played: key in progress.bestStars,
-      unlocked: isPlayable(level, settings.mode, progress.bestStars),
     };
   }),
 );
 
-/** 卡皮巴拉站在第一個還沒拿到星星的關卡上 */
-const currentId = computed(() => stops.value.find((s) => s.unlocked && s.stars === 0)?.level.id);
+/** 每一關、每個難度都可以直接玩；卡皮巴拉站在第一個還沒拿到星星的關卡上，當作建議的下一關 */
+const currentId = computed(() => stops.value.find((s) => s.stars === 0)?.level.id);
 
 const goal = computed(() => {
   const n = stops.value.length;
@@ -154,18 +147,16 @@ const termStars = computed(() => stops.value.reduce((sum, s) => sum + s.stars, 0
       <button
         type="button"
         class="stone"
-        :class="{ locked: !stop.unlocked, cleared: stop.stars > 0 }"
-        :disabled="!stop.unlocked"
-        :aria-label="`第 ${stop.number} 關：${stop.level.title}${stop.unlocked ? '' : '（還沒解鎖）'}`"
+        :class="{ cleared: stop.stars > 0 }"
+        :aria-label="`第 ${stop.number} 關：${stop.level.title}`"
         @click="$emit('select', stop.level)"
       >
-        <span v-if="stop.unlocked">{{ stop.number }}</span>
-        <span v-else aria-hidden="true">🔒</span>
+        {{ stop.number }}
       </button>
       <div class="label">
         <span class="title">{{ stop.level.title }}</span>
         <StarRow v-if="stop.played" :count="stop.stars" />
-        <span v-else class="desc">{{ stop.unlocked ? stop.level.description : MODE_LOCKED[settings.mode] }}</span>
+        <span v-else class="desc">{{ stop.level.description }}</span>
       </div>
     </div>
 
@@ -371,18 +362,6 @@ h1 {
   background: var(--accent-soft);
   border-color: var(--accent);
   box-shadow: 0 5px 0 #d9a441;
-}
-
-.stone.locked {
-  /* 用淡色而不是透明度，避免底下的小路透出來 */
-  background: #f3f0eb;
-  border-color: #d8cfc3;
-  box-shadow: 0 5px 0 #d8cfc3;
-  font-size: 1.3rem;
-}
-
-.stone.locked span {
-  opacity: 0.6;
 }
 
 .here {

@@ -5,11 +5,8 @@ import {
   createRng,
   generateQuestion,
   hintFor,
-  isPlayable,
-  isUnlocked,
   questionPoints,
   starsFor,
-  type Level,
   type QuestionResult,
 } from '../src';
 import { question } from './helpers';
@@ -91,47 +88,5 @@ describe('計分與星星', () => {
 
   it('全部都靠提示答對也能拿到星星，不會被扣光', () => {
     expect(starsFor([helped, helped, helped, helped, helped])).toBeGreaterThanOrEqual(1);
-  });
-});
-
-describe('isUnlocked', () => {
-  const term = (grade: 1 | 2, semester: 1 | 2) => LEVELS.filter((l) => l.grade === grade && l.semester === semester);
-
-  it('每學期的第一關一定解鎖', () => {
-    for (const [g, s] of [[1, 1], [1, 2], [2, 1], [2, 2]] as const) {
-      expect(isUnlocked(term(g, s)[0]!, {})).toBe(true);
-    }
-  });
-
-  it('前一關拿到 1 顆星以上才解鎖下一關', () => {
-    const [first, second, third] = term(1, 1) as [Level, Level, Level];
-    expect(isUnlocked(second, {})).toBe(false);
-    expect(isUnlocked(second, { [first.id]: 0 })).toBe(false);
-    expect(isUnlocked(second, { [first.id]: 1 })).toBe(true);
-    expect(isUnlocked(third, { [first.id]: 3 })).toBe(false);
-  });
-
-  it('前一學期的進度不影響下一學期', () => {
-    expect(isUnlocked(term(2, 1)[0]!, {})).toBe(true);
-  });
-});
-
-describe('isPlayable：困難、天才版的解鎖', () => {
-  const level = LEVELS[0]!;
-
-  it('困難版要這關的簡單版拿到 2 顆星', () => {
-    expect(isPlayable(level, 'hard', {})).toBe(false);
-    expect(isPlayable(level, 'hard', { [level.id]: 1 })).toBe(false);
-    expect(isPlayable(level, 'hard', { [level.id]: 2 })).toBe(true);
-  });
-
-  it('天才版要這關的困難版拿到 2 顆星，簡單版 3 顆星不算', () => {
-    expect(isPlayable(level, 'genius', { [level.id]: 3 })).toBe(false);
-    expect(isPlayable(level, 'genius', { [`${level.id}@hard`]: 2 })).toBe(true);
-  });
-
-  it('簡單版照地圖順序解鎖', () => {
-    expect(isPlayable(LEVELS[1]!, 'easy', {})).toBe(false);
-    expect(isPlayable(LEVELS[1]!, 'easy', { [level.id]: 1 })).toBe(true);
   });
 });

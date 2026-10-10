@@ -11,7 +11,6 @@ import {
   explain,
   generateRound,
   hintFor,
-  isPlayable,
   levelRange,
   questionPoints,
   starsFor,
@@ -25,7 +24,7 @@ import NumberPad from './NumberPad.vue';
 import ChoiceButtons from './ChoiceButtons.vue';
 import Capybara from './Capybara.vue';
 import StarRow from './StarRow.vue';
-import { progress, recordStars, settings } from '../store';
+import { recordStars, settings } from '../store';
 import { speak, speechSupported, stopSpeaking } from '../speech';
 import { playCorrect, playStars, playWrong } from '../sound';
 
@@ -57,8 +56,6 @@ const results = ref<QuestionResult[]>([]);
 const finished = ref(false);
 const stars = ref(0);
 const newBest = ref(false);
-/** 這回合打開了哪個更難的版本 */
-const unlockedMode = ref<Mode | null>(null);
 
 /** 輸入框最多幾位數：依關卡最大的數決定，例如 1000 以內是 4 位 */
 const maxDigits = String(levelRange(props.level, props.mode).max).length;
@@ -125,7 +122,6 @@ function start() {
   index.value = 0;
   results.value = [];
   finished.value = false;
-  unlockedMode.value = null;
   resetQuestion();
 }
 
@@ -244,29 +240,18 @@ function next() {
 }
 
 function finish() {
-  const before = harderMode.value && isPlayable(props.level, harderMode.value, progress.bestStars);
   finished.value = true;
   stars.value = starsFor(results.value);
   newBest.value = recordStars(props.level.id, props.mode, stars.value);
-  if (harderMode.value && !before && isPlayable(props.level, harderMode.value, progress.bestStars)) {
-    unlockedMode.value = harderMode.value;
-  }
   playStars(stars.value);
-  const unlocked = unlockedMode.value ? `解鎖${MODE_NAMES[unlockedMode.value]}版了！` : '';
-  speak(`拿到 ${stars.value} 顆星。${resultMessage.value}${unlocked}`);
+  speak(`拿到 ${stars.value} 顆星。${resultMessage.value}`);
 }
 
 /** 同一學期、同一難度的下一關 */
 const nextLevel = computed(() => {
   const term = LEVELS.filter((l) => l.grade === props.level.grade && l.semester === props.level.semester);
-  const following = term[term.findIndex((l) => l.id === props.level.id) + 1];
-  return following && isPlayable(following, props.mode, progress.bestStars) ? following : undefined;
+  return term[term.findIndex((l) => l.id === props.level.id) + 1];
 });
-
-/** 這關更難的版本已經可以玩 */
-const harderPlayable = computed(
-  () => harderMode.value !== undefined && isPlayable(props.level, harderMode.value, progress.bestStars),
-);
 
 const soloCount = computed(() => results.value.filter((r) => questionPoints(r) === 2).length);
 const helpedCount = computed(() => results.value.filter((r) => questionPoints(r) === 1).length);
@@ -347,13 +332,12 @@ onBeforeUnmount(() => {
     <p class="detail">
       自己答對 {{ soloCount }} 題・有幫忙才答對 {{ helpedCount }} 題（共 {{ ROUND_SIZE }} 題）
     </p>
-    <p v-if="unlockedMode" class="unlocked">🔓 解鎖「{{ level.title }}」{{ MODE_NAMES[unlockedMode] }}版了！</p>
     <div class="actions">
       <button v-if="nextLevel" type="button" class="btn" @click="emit('play', nextLevel, mode)">
         下一關：{{ nextLevel.title }} →
       </button>
       <button
-        v-if="harderMode && harderPlayable"
+        v-if="harderMode"
         type="button"
         class="btn"
         :class="{ secondary: nextLevel }"
@@ -659,12 +643,6 @@ h1 {
 .detail {
   margin: 0;
   color: var(--text-soft);
-}
-
-.unlocked {
-  margin: 14px 0 0;
-  font-weight: 800;
-  color: var(--primary-dark);
 }
 
 .actions {
