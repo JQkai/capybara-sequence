@@ -1,3 +1,4 @@
+import { explainFree } from './free';
 import type { Question } from './types';
 
 /** 用孩子聽得懂的話說出規律，例如「每次多 5」。依課綱 R-3-2 備註，不使用公式。 */
@@ -47,6 +48,7 @@ export function reasonFor(question: Question, position: number, to: number | str
 }
 
 export function explain(question: Question): Explanation {
+  if (question.free) return { ...explainFree(question), times: [] };
   const { blanks, answers, step, timesOf } = question;
   // 排一排：每個位置都是孩子放的，說明規律就夠了
   if (question.type === 'order') return { rule: describeRule(step), reasons: [], times: [] };

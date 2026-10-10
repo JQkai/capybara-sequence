@@ -1,9 +1,12 @@
+import type { FreeInfo } from './free';
+
 /**
  * 題型：
  * next＝選出下一個數（選擇題）；fill＝補空格（用數字鍵盤輸入）；
- * error＝找出寫錯的那個數；order＝把打亂的數字卡排成數列
+ * error＝找出寫錯的那個數；order＝把打亂的數字卡排成數列；
+ * rule＝說說規律（只在自由模式出現）：看整串數，從選項選出規律
  */
-export type QuestionType = 'next' | 'fill' | 'error' | 'order';
+export type QuestionType = 'next' | 'fill' | 'error' | 'order' | 'rule';
 
 /** 練習哪種題型：mix＝每回合混合所有題型；其他只出那一種（fill 包含選擇題和補空格） */
 export type Practice = 'mix' | 'fill' | 'error' | 'order';
@@ -70,7 +73,8 @@ export interface Question {
   /** 數列內容與空格位置相同的題目，key 也相同，用來避免同一回合重複出題 */
   key: string;
   levelId: string;
-  mode: Mode;
+  /** free＝自由模式的題目 */
+  mode: Mode | 'free';
   type: QuestionType;
   /** 完整數列（含答案） */
   terms: number[];
@@ -91,4 +95,6 @@ export interface Question {
   timesOf?: number;
   /** 選擇題的選項（已打亂順序）；補空格題為空陣列 */
   choices: number[];
+  /** 自由模式的規律與說說規律的選項 */
+  free?: FreeInfo;
 }

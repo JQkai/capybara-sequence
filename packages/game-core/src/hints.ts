@@ -1,4 +1,5 @@
 import { describeRule, knownNeighbor, reasonFor } from './explain';
+import { freeSolvedGaps, hintFree } from './free';
 import { shownTerms } from './generator';
 import type { Question } from './types';
 
@@ -26,8 +27,9 @@ function diffLabel(diff: number): string {
   return diff >= 0 ? `+${diff}` : `−${-diff}`;
 }
 
-/** 完整數列每兩顆之間的差（全部一樣，例如 +5 +5 +5），排一排排好後用來讓孩子看到規律 */
+/** 完整數列每兩顆之間的差（全部一樣，例如 +5 +5 +5），排一排排好後用來讓孩子看到規律；自由模式依規律標（例如 ×2） */
 export function stepGaps(question: Question): Gap[] {
+  if (question.free) return freeSolvedGaps(question);
   return question.terms.slice(0, -1).map((_, i) => ({ index: i, label: diffLabel(question.step) }));
 }
 
@@ -38,7 +40,8 @@ export function stepGaps(question: Question): Gap[] {
  *   如果寫錯的數旁邊不標，等於直接告訴孩子答案
  * - 排一排：先找最小（最大）的數，再一顆一顆往下排
  */
-export function hintFor(question: Question, focus = question.blanks[0]!): Hint {
+export function hintFor(question: Question, focus = question.blanks[0] ?? 0): Hint {
+  if (question.free) return hintFree(question, focus);
   const { terms, blanks, step } = question;
   const rule = describeRule(step);
 

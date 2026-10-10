@@ -1,3 +1,4 @@
+import { freeErrorUnique, freeUnique, specFits } from './free';
 import type { Question } from './types';
 
 /** 把輸入轉成整數；全形數字也接受。不是數字就回傳 null。 */
@@ -5,6 +6,34 @@ export function parseAnswer(input: number | string): number | null {
   if (typeof input === 'number') return Number.isInteger(input) ? input : null;
   const text = input.trim().replace(/[０-９]/g, (c) => String(c.charCodeAt(0) - 0xff10));
   return /^\d+$/.test(text) ? Number(text) : null;
+}
+
+/** 說說規律：選的說明是不是正確的那一個 */
+export function checkRule(question: Question, option: string): boolean {
+  return question.free?.ruleAnswer === option;
+}
+
+/** 自由模式題目的答案是否唯一 */
+function freeUniquelyDetermined(question: Question): boolean {
+  const { free, terms, blanks, type } = question;
+  const { spec } = free!;
+  if (!specFits(spec, terms)) return false;
+  if (type === 'rule') {
+    const options = free!.ruleOptions ?? [];
+    // 選項裡只有正確答案是這串數的規律
+    return options.length === 4 && new Set(options).size === 4 && options.includes(free!.ruleAnswer ?? '');
+  }
+  if (type === 'order') {
+    const cards = question.cards ?? [];
+    const sorted = [...cards].sort((a, b) => (terms[1]! > terms[0]! ? a - b : b - a));
+    return new Set(cards).size === cards.length && sorted.every((c, i) => c === terms[i]);
+  }
+  if (type === 'error') {
+    const shown = [...terms];
+    shown[blanks[0]!] = question.wrong!;
+    return question.wrong !== terms[blanks[0]!] && freeErrorUnique(spec.family, shown, blanks[0]!, terms[blanks[0]!]!);
+  }
+  return freeUnique(spec.family, terms, blanks);
 }
 
 /** 檢查某一個空格的答案；position 不寫就是第一個空格 */
@@ -20,6 +49,7 @@ export function checkAnswer(question: Question, input: number | string, position
  * 找錯誤題的「看得到的數」是沒寫錯的那些數：其他數都符合規律時，只有改寫錯的那一個才能讓整列符合規律。
  */
 export function isUniquelyDetermined(question: Question): boolean {
+  if (question.free) return freeUniquelyDetermined(question);
   const { terms, blanks, answers, step } = question;
   if (step === 0 || blanks.length !== answers.length) return false;
 

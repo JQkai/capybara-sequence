@@ -1,15 +1,21 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends number | string">
+import { computed } from 'vue';
+
 const props = defineProps<{
-  choices: number[];
-  answer: number;
-  picked: number | null;
+  /** 選項：數（選下一個數）或文字（說說規律） */
+  choices: T[];
+  answer: T;
+  picked: T | null;
   status: 'answering' | 'correct' | 'wrong';
   /** 已經選錯的選項：再試一次時不能再選 */
-  eliminated: number[];
+  eliminated: T[];
 }>();
-const emit = defineEmits<{ choose: [value: number] }>();
+const emit = defineEmits<{ choose: [value: T] }>();
 
-function stateOf(choice: number): string {
+/** 文字選項比較長，一行一個 */
+const text = computed(() => props.choices.some((c) => typeof c === 'string'));
+
+function stateOf(choice: T): string {
   if (props.status === 'answering') return props.eliminated.includes(choice) ? 'crossed' : '';
   if (choice === props.answer) return 'correct';
   return choice === props.picked ? 'wrong' : 'dim';
@@ -17,7 +23,7 @@ function stateOf(choice: number): string {
 </script>
 
 <template>
-  <div class="choices" :class="{ four: choices.length === 4 }" role="group" aria-label="選項">
+  <div class="choices" :class="{ four: choices.length === 4, text }" role="group" aria-label="選項">
     <button
       v-for="choice in choices"
       :key="choice"
@@ -49,6 +55,14 @@ function stateOf(choice: number): string {
   }
 }
 
+/* 說說規律的文字選項：一行一個，寬度撐滿 */
+.choices.text,
+.choices.text.four {
+  grid-auto-flow: row;
+  grid-template-columns: minmax(0, 520px);
+  gap: 10px;
+}
+
 .choice {
   min-height: 72px;
   padding: 8px 18px;
@@ -59,6 +73,13 @@ function stateOf(choice: number): string {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   box-shadow: var(--shadow);
+}
+
+.text .choice {
+  min-height: 56px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: left;
 }
 
 .choice:active:not(:disabled) {

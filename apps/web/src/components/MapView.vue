@@ -6,7 +6,7 @@ import StarRow from './StarRow.vue';
 import { progress, settings, type TermKey } from '../store';
 import { speechSupported } from '../speech';
 
-defineEmits<{ select: [level: Level] }>();
+defineEmits<{ select: [level: Level]; free: [] }>();
 
 const TERMS: { key: TermKey; short: string; long: string }[] = [
   { key: '1-1', short: '一上', long: '一年級上學期' },
@@ -94,6 +94,15 @@ const termStars = computed(() => stops.value.reduce((sum, s) => sum + s.stars, 0
       </label>
     </div>
   </header>
+
+  <button type="button" class="free-entry" @click="$emit('free')">
+    <span class="free-icon" aria-hidden="true">🎲</span>
+    <span class="free-text">
+      <strong>自由模式</strong>
+      <small>不分年級，挑戰乘幾倍、差越來越大等更多規律</small>
+    </span>
+    <span aria-hidden="true">→</span>
+  </button>
 
   <nav class="tabs" role="tablist" aria-label="選擇學期">
     <button
@@ -234,6 +243,44 @@ h1 {
   width: 20px;
   height: 20px;
   accent-color: var(--primary);
+}
+
+.free-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 2px solid var(--genius);
+  border-radius: var(--radius);
+  background: var(--genius-soft);
+  text-align: left;
+  color: var(--text);
+  font-size: 1.2rem;
+}
+
+.free-entry:active {
+  transform: translateY(2px);
+}
+
+.free-icon {
+  font-size: 1.8rem;
+}
+
+.free-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.free-text strong {
+  color: var(--genius);
+}
+
+.free-text small {
+  font-size: 0.85rem;
+  color: var(--text-soft);
 }
 
 .tabs {
