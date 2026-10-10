@@ -218,7 +218,7 @@ function markWrong() {
     speak(`正確的順序是 ${q.terms.join('、')}。規律是${rule}。`);
   } else {
     const answers = q.answers.join('、');
-    speak(`正確答案${multi.value ? '依序' : ''}是 ${answers}。規律是${rule}，${reasons.join('；')}。${timesText()}`);
+    speak(`正確答案${multi.value ? '從左到右' : ''}是 ${answers}。規律是${rule}，${reasons.join('；')}。${timesText()}`);
   }
 }
 
@@ -553,7 +553,7 @@ onBeforeUnmount(() => {
           <p>規律是「{{ explanation.rule }}」</p>
         </template>
         <template v-else>
-          <p class="headline">正確答案{{ multi ? '依序' : '' }}是 {{ question.answers.join('、') }}</p>
+          <p class="headline">正確答案{{ multi ? '從左到右' : '' }}是 {{ question.answers.join('、') }}</p>
           <p>規律是「{{ explanation.rule }}」，{{ explanation.reasons.join('；') }}。</p>
         </template>
         <p v-if="explanation.times.length">{{ explanation.times.join('，') }}。</p>

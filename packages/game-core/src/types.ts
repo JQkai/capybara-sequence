@@ -54,6 +54,8 @@ export interface Level {
   blankFirst: boolean;
   /** 困難、天才版的設定；沒寫就沿用簡單版的規則，數列長度自動選 8 或 7 */
   hard?: {
+    /** 困難、天才版的關卡說明；範圍或方向和簡單版不同時才寫（例如放寬到 100 以內、加入往回數） */
+    description?: string;
     rules?: StepRule[];
     length?: number;
     /**

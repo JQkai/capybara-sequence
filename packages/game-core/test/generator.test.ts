@@ -4,6 +4,7 @@ import {
   MODES,
   createRng,
   describeGenius,
+  describeLevel,
   shownTerms,
   typesFor,
   PRACTICES,
@@ -288,11 +289,13 @@ describe('天才版', () => {
 
   it('說明文字依實際有的變化產生', () => {
     const term = (g: number, s: number) => LEVELS.filter((l) => l.grade === g && l.semester === s);
-    expect(describeGenius(term(1, 1))).toBe('一律 3 個空格，有些題目還會跨過整十');
-    expect(describeGenius(term(1, 2))).toBe('一律 3 個空格，有些題目還會不從倍數開始、跨過整十');
+    expect(describeGenius(term(1, 1))).toBe('都有 3 個空格，有些題目還會跨過整十');
+    expect(describeGenius(term(1, 2))).toBe('都有 3 個空格，有些題目還會從別的數開始、跨過整十');
     expect(describeGenius(term(2, 2))).toContain('往回數');
-    expect(describeGenius(term(2, 2))).toContain('不從倍數開始');
-    expect(describeGenius([level('1a-to10')])).toBe('一律 3 個空格');
+    expect(describeGenius(term(2, 2))).toContain('從別的數開始');
+    expect(describeGenius([level('1a-to10')])).toBe('都有 3 個空格');
+    // 「倍數」是五年級的詞，不能出現在給一、二年級看的說明裡
+    for (const g of [1, 2]) for (const s of [1, 2]) expect(describeGenius(term(g, s))).not.toContain('倍數');
     for (const g of [1, 2]) {
       for (const s of [1, 2]) {
         if (g === 1) expect(describeGenius(term(g, s))).not.toMatch(/整百|往回數/);
@@ -306,6 +309,28 @@ describe('天才版', () => {
       Math.floor(Math.min(q.terms[0]!, q.terms.at(-1)!) / every) !==
       Math.floor(Math.max(q.terms[0]!, q.terms.at(-1)!) / every);
     expect(to200.some((q) => Math.abs(q.step) === 10 && crosses(q, 100))).toBe(true);
+  });
+});
+
+describe('關卡說明', () => {
+  it('困難、天才版範圍或方向不同的關卡，說明也跟著不同', () => {
+    for (const level of LEVELS) {
+      const easyMax = levelRange(level, 'easy').max;
+      for (const mode of ['hard', 'genius'] as const) {
+        const text = describeLevel(level, mode);
+        // 範圍放寬到 100 的關卡，說明要寫到 100
+        if (levelRange(level, mode).max > easyMax && easyMax < 100) expect(text, level.id).toContain('100');
+        // 簡單版只往上數、困難版也往回數的關卡，說明要寫往回數
+        const easyDown = level.rules.some((r) => r.step < 0);
+        const hardDown = settingsFor(level, mode).rules.some((r) => r.step < 0);
+        if (!easyDown && hardDown) expect(text, level.id).toContain('往回數');
+      }
+      expect(describeLevel(level, 'easy')).toBe(level.description);
+    }
+  });
+
+  it('給孩子看的說明不用五年級的「倍數」', () => {
+    for (const level of LEVELS) for (const mode of MODES) expect(describeLevel(level, mode), level.id).not.toContain('倍數');
   });
 });
 

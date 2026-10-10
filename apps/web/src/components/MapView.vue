@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { LEVELS, MODES, MODE_NAMES, PRACTICES, PRACTICE_NAMES, describeGenius, starsKey, type Level } from '@kidstudy/game-core';
+import { LEVELS, MODES, MODE_NAMES, PRACTICES, PRACTICE_NAMES, describeGenius, describeLevel, starsKey, type Level } from '@kidstudy/game-core';
 import Capybara from './Capybara.vue';
 import StarRow from './StarRow.vue';
 import { progress, settings, type TermKey } from '../store';
@@ -28,7 +28,7 @@ const levels = computed(() =>
 /** 難度說明；天才版依這學期的關卡實際有的變化產生（例如一年級不會跨過整百） */
 const modeHelp = computed(() => {
   if (settings.mode === 'easy') return '5 個數、1 個空格';
-  if (settings.mode === 'hard') return '7～8 個數、2～3 個空格';
+  if (settings.mode === 'hard') return '7～8 個數；填空格時有 2～3 個空格';
   return describeGenius(levels.value);
 });
 
@@ -172,7 +172,7 @@ const termStars = computed(() => stops.value.reduce((sum, s) => sum + s.stars, 0
       <div class="label">
         <span class="title">{{ stop.level.title }}</span>
         <StarRow v-if="stop.played" :count="stop.stars" />
-        <span v-else class="desc">{{ stop.level.description }}</span>
+        <span v-else class="desc">{{ describeLevel(stop.level, settings.mode) }}</span>
       </div>
     </div>
 

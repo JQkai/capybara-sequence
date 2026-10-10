@@ -140,18 +140,26 @@ export function geniusTwists(level: Level): GeniusTwists {
   };
 }
 
-/** 給孩子看的天才版說明，依這些關卡實際有的變化產生，例如「一律 3 個空格，還會跨過整十、往回數」 */
+/**
+ * 給孩子看的天才版說明，依這些關卡實際有的變化產生，例如「都有 3 個空格，有些題目還會跨過整十、往回數」。
+ * 用「從別的數開始」而不是「不從倍數開始」：「倍數」是五年級才學的詞（課綱 N-5-3）。
+ */
 export function describeGenius(levels: Level[]): string {
   const all = levels.map(geniusTwists);
   const any = (key: keyof GeniusTwists) => all.some((t) => t[key]);
   const extras = [
-    any('offStart') && '不從倍數開始',
+    any('offStart') && '從別的數開始',
     any('crossTens') && '跨過整十',
     any('crossHundreds') && '跨過整百',
     any('descending') && '往回數',
   ].filter(Boolean);
-  const blanks = `一律 ${BLANK_COUNTS.genius.max} 個空格`;
+  const blanks = `都有 ${BLANK_COUNTS.genius.max} 個空格`;
   return extras.length ? `${blanks}，有些題目還會${extras.join('、')}` : blanks;
+}
+
+/** 地圖上給孩子看的關卡說明；困難、天才版範圍或方向不同的關卡另外寫 */
+export function describeLevel(level: Level, mode: Mode): string {
+  return mode === 'easy' ? level.description : (level.hard?.description ?? level.description);
 }
 
 /** 關卡設定有沒有出不了題的規則；有的話丟出錯誤 */

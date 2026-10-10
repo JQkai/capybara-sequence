@@ -8,6 +8,7 @@ export {
   shownTerms,
   typesFor,
   describeGenius,
+  describeLevel,
   geniusTwists,
   generateQuestion,
   generateRound,
