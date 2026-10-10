@@ -15,6 +15,7 @@ import {
   levelRange,
   questionPoints,
   shownTerms,
+  stepGaps,
   starsFor,
   type Level,
   type Mode,
@@ -141,6 +142,12 @@ const mascotAt = computed(() => {
   return status.value === 'answering' ? active.value : q.blanks[0]!;
 });
 
+/** 石頭下方標的差：打開提示時標出提示的差；排一排作答結束後標出每兩顆的差，讓孩子看到排好的數字有規律 */
+const shownGaps = computed(() => {
+  if (question.value.type === 'order' && status.value !== 'answering') return stepGaps(question.value);
+  return hintLevel.value >= 1 ? hint.value.gaps : [];
+});
+
 /** 排一排還沒放進石頭的數字卡 */
 const pool = computed(() => {
   const placed = new Set(Object.values(inputs.value).filter(Boolean));
@@ -215,10 +222,15 @@ function markWrong() {
   }
 }
 
-function retry(message: string) {
-  hintLevel.value = Math.max(hintLevel.value, 1);
+/**
+ * 答錯一次、再試：補空格、選擇題、排一排會自動打開第 1 層提示。
+ * 找錯誤不自動打開：它的第 1 層會標出每兩顆的差，兩個不一樣的差剛好夾著寫錯的那顆，等於直接說出答案；
+ * 孩子想看提示可以自己按「提示」。
+ */
+function retry(message: string, autoHint = true) {
+  if (autoHint) hintLevel.value = Math.max(hintLevel.value, 1);
   playWrong();
-  speak(`${message}${hintSpeech(hintLevel.value)}`);
+  speak(hintLevel.value > 0 ? `${message}${hintSpeech(hintLevel.value)}` : message);
 }
 
 /** 選擇題 */
@@ -273,7 +285,7 @@ function pickStone(position: number) {
   if (position === blanks.value[0]) return markCorrect();
   eliminated.value.push(position);
   wrongBlanks.value = [blanks.value[0]!];
-  if (tries.value < MAX_ATTEMPTS) retry('不是這一顆，再找找看。');
+  if (tries.value < MAX_ATTEMPTS) retry('不是這一顆，再找找看。', false);
   else markWrong();
 }
 
@@ -470,12 +482,12 @@ onBeforeUnmount(() => {
       點一下空格，可以選要填哪一格
     </p>
 
-    <SequenceRow :cells="cells" :mascot-at="mascotAt" :gaps="hintLevel >= 1 ? hint.gaps : []" @select="tapCell" />
+    <SequenceRow :cells="cells" :mascot-at="mascotAt" :gaps="shownGaps" @select="tapCell" />
 
     <!-- 提示框作答後也留著，下方的選項才不會往上跳，避免孩子連點時點錯 -->
-    <div v-if="hintLevel > 0" class="hint-box" aria-live="polite">
+    <div v-if="hintLevel > 0 || retrying" class="hint-box" aria-live="polite">
       <p v-if="retrying" class="headline">{{ retryHeadline }}</p>
-      <p>💡 {{ hint.intro }}</p>
+      <p v-if="hintLevel >= 1">💡 {{ hint.intro }}</p>
       <p v-if="hintLevel >= 2">💡 規律是「{{ hint.rule }}」</p>
       <p v-if="hintLevel >= 3">💡 {{ hint.guide }}</p>
     </div>

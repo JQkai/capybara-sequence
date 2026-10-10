@@ -24,7 +24,7 @@ export {
 } from './generator';
 export { checkAnswer, parseAnswer, isUniquelyDetermined } from './answer';
 export { describeRule, explain, knownNeighbor, reasonFor, type Explanation } from './explain';
-export { HINT_LEVELS, hintFor, type Gap, type Hint } from './hints';
+export { HINT_LEVELS, hintFor, stepGaps, type Gap, type Hint } from './hints';
 export {
   MAX_ATTEMPTS,
   MODES,

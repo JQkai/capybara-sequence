@@ -321,19 +321,24 @@ export function shownTerms(question: Question): number[] {
 
 /**
  * 題目難度排序，數字越大越難：
- * 選擇題 < 排一排 < 找錯誤 < 一個空格（最後 < 中間 < 第一個）< 兩個空格 < 三個空格；空格在開頭的再難一點
+ * 選擇題 < 排一排 < 找錯誤（寫錯在中間）< 一個空格（最後 < 中間 < 第一個）
+ * < 找錯誤（寫錯在頭尾）< 兩個空格 < 三個空格；空格在開頭的再難一點。
+ * 找錯誤寫錯在頭尾時，只有一個差和規律不同，要先判斷是頭還是尾寫錯，比寫錯在中間難。
  */
 export function questionRank(question: Question): number {
   const { type, blanks, terms } = question;
   if (type === 'next') return 0;
   if (type === 'order') return 1;
-  if (type === 'error') return 2;
+  if (type === 'error') {
+    const at = blanks[0]!;
+    return at === 0 || at === terms.length - 1 ? 6 : 2;
+  }
   if (blanks.length === 1) {
     const blank = blanks[0]!;
     if (blank === terms.length - 1) return 3;
     return blank > 0 ? 4 : 5;
   }
-  return 6 + (blanks.length - 2) * 2 + (blanks.includes(0) ? 1 : 0);
+  return 7 + (blanks.length - 2) * 2 + (blanks.includes(0) ? 1 : 0);
 }
 
 export interface RoundOptions {

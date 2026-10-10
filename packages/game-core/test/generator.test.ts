@@ -395,6 +395,26 @@ describe('generateRound', () => {
     }
   });
 
+  it('找錯誤寫錯在頭尾的題目，排在一個空格的補空格之後、多個空格之前', () => {
+    // 百數表挑戰的空格可以在第一個位置
+    const level = LEVELS.find((l) => l.id === '1b-chart')!;
+    const at = (type: 'error' | 'fill', mode: 'easy' | 'hard', test: (b: number[], n: number) => boolean) => {
+      for (let seed = 1; seed < 2000; seed++) {
+        const q = generateQuestion(level, createRng(seed), { mode, type });
+        if (test(q.blanks, q.terms.length)) return questionRank(q);
+      }
+      throw new Error('找不到題目');
+    };
+    const errorEnd = at('error', 'easy', (b, n) => b[0] === 0 || b[0] === n - 1);
+    const errorMiddle = at('error', 'easy', (b, n) => b[0]! > 0 && b[0]! < n - 1);
+    const fillFirst = at('fill', 'easy', (b) => b[0] === 0);
+    const fillLast = at('fill', 'easy', (b, n) => b[0] === n - 1);
+    const multi = at('fill', 'hard', (b) => b.length === 2);
+    expect(errorMiddle).toBeLessThan(fillLast);
+    expect(errorEnd).toBeGreaterThan(fillFirst);
+    expect(errorEnd).toBeLessThan(multi);
+  });
+
   it.each(MODES)('%s：一回合 5 題，題目不重複，每種題型都出現', (mode) => {
     for (const level of LEVELS) {
       for (let seed = 1; seed <= 100; seed++) {

@@ -5,6 +5,7 @@ import {
   createRng,
   generateQuestion,
   hintFor,
+  stepGaps,
   questionPoints,
   starsFor,
   type QuestionResult,
@@ -87,6 +88,15 @@ describe('找錯誤、排一排的提示', () => {
         }
       }
     }
+  });
+
+  it('stepGaps：完整數列每兩顆之間都標出規律的差', () => {
+    const down = question([50, 40, 30, 20], [0, 1, 2, 3], { type: 'order', cards: [30, 50, 20, 40] });
+    expect(stepGaps(down)).toEqual([
+      { index: 0, label: '−10' },
+      { index: 1, label: '−10' },
+      { index: 2, label: '−10' },
+    ]);
   });
 
   it('排一排：先找最小（往回數就找最大）的數', () => {

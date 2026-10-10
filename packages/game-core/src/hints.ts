@@ -26,6 +26,11 @@ function diffLabel(diff: number): string {
   return diff >= 0 ? `+${diff}` : `−${-diff}`;
 }
 
+/** 完整數列每兩顆之間的差（全部一樣，例如 +5 +5 +5），排一排排好後用來讓孩子看到規律 */
+export function stepGaps(question: Question): Gap[] {
+  return question.terms.slice(0, -1).map((_, i) => ({ index: i, label: diffLabel(question.step) }));
+}
+
 /**
  * focus 是孩子正在填的位置（不寫就是第一個）。
  * - 補空格、選擇題：只在兩個都看得到的相鄰數之間標差；空格兩邊都是空格時（例如 □、□、15 的第一格），引導先算旁邊有數的那格
