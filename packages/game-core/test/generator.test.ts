@@ -4,6 +4,9 @@ import {
   MODES,
   createRng,
   describeGenius,
+  shownTerms,
+  typesFor,
+  PRACTICES,
   explain,
   geniusTwists,
   generateQuestion,
@@ -96,11 +99,15 @@ describe.each(modeCases)('%s 出的題目', (_, level, mode) => {
     }
   });
 
-  it('空格位置符合難度與關卡設定', () => {
+  it('作答位置符合題型、難度與關卡設定', () => {
     for (const q of samples(level, mode)) {
       expect(settings.types).toContain(q.type);
       expect([...q.blanks].sort((a, b) => a - b)).toEqual(q.blanks);
-      if (mode === 'easy') {
+      if (q.type === 'order') {
+        expect(q.blanks).toEqual(q.terms.map((_, i) => i));
+      } else if (q.type === 'error') {
+        expect(q.blanks).toHaveLength(1);
+      } else if (mode === 'easy') {
         expect(q.blanks).toHaveLength(1);
         if (q.type === 'next') expect(q.blanks[0]).toBe(settings.length - 1);
         if (!level.blankFirst) expect(q.blanks[0]).toBeGreaterThan(0);
@@ -110,6 +117,37 @@ describe.each(modeCases)('%s 出的題目', (_, level, mode) => {
         expect(q.blanks.length).toBeLessThanOrEqual(3);
         expect(validBlanks(q.blanks, q.terms.length)).toBe(true);
       }
+    }
+  });
+
+  it('找錯誤：只有一個數寫錯，而且只有改它才能讓整列符合規律', () => {
+    const { min, max } = levelRange(level, mode);
+    for (const q of samples(level, mode)) {
+      if (q.type !== 'error') continue;
+      const shown = shownTerms(q);
+      const at = q.blanks[0]!;
+      expect(shown.filter((v, i) => v !== q.terms[i])).toEqual([q.wrong]);
+      expect(q.wrong).toBeGreaterThanOrEqual(Math.max(0, min));
+      expect(q.wrong).toBeLessThanOrEqual(max);
+      // 逐一假設每個位置是寫錯的：其他數都符合同一個規律的位置只有一個
+      const fixable = shown.map((_, p) => {
+        const others = shown.map((v, i) => [i, v] as const).filter(([i]) => i !== p);
+        const [i0, v0] = others[0]!;
+        const [i1, v1] = others[1]!;
+        const d = (v1 - v0) / (i1 - i0);
+        return d !== 0 && others.every(([i, v]) => v === v0 + (i - i0) * d);
+      });
+      expect(fixable.filter(Boolean), shown.join(',')).toHaveLength(1);
+      expect(fixable[at]).toBe(true);
+    }
+  });
+
+  it('排一排：數字卡是整個數列打亂、不是原本的順序', () => {
+    for (const q of samples(level, mode)) {
+      if (q.type !== 'order') continue;
+      expect([...q.cards!].sort((a, b) => a - b)).toEqual([...q.terms].sort((a, b) => a - b));
+      expect(q.cards).not.toEqual(q.terms);
+      expect(q.answers).toEqual(q.terms);
     }
   });
 
@@ -167,7 +205,7 @@ describe('困難版', () => {
 
   it('會出現連續兩個空格、空格在開頭，兩個和三個空格都有', () => {
     for (const level of LEVELS) {
-      const qs = [...samples(level, 'hard')];
+      const qs = [...samples(level, 'hard')].filter((q) => q.type === 'fill');
       expect(qs.some((q) => q.blanks.some((b) => q.blanks.includes(b + 1))), level.id).toBe(true);
       expect(qs.some((q) => q.blanks[0] === 0), level.id).toBe(true);
       expect(qs.some((q) => q.blanks.length === 2), level.id).toBe(true);
@@ -203,9 +241,9 @@ describe('困難版', () => {
 });
 
 describe('天才版', () => {
-  it('一律 3 個空格', () => {
+  it('補空格一律 3 個空格', () => {
     for (const level of LEVELS) {
-      for (const q of samples(level, 'genius')) expect(q.blanks, level.id).toHaveLength(3);
+      for (const q of samples(level, 'genius')) if (q.type === 'fill') expect(q.blanks, level.id).toHaveLength(3);
     }
   });
 
@@ -295,7 +333,8 @@ describe('乘法說明', () => {
           expect(t / q.timesOf!).toBeGreaterThanOrEqual(1);
           expect(t / q.timesOf!).toBeLessThanOrEqual(9);
         }
-        const expected = q.answers.map((a) => `${q.timesOf} 的 ${a / q.timesOf!} 倍是 ${a}`);
+        // 排一排只說明規律，其他題型每個作答位置都有「倍」的說明
+        const expected = q.type === 'order' ? [] : q.answers.map((a) => `${q.timesOf} 的 ${a / q.timesOf!} 倍是 ${a}`);
         expect([...explain(q).times].sort()).toEqual(expected.sort());
       }
     }
@@ -356,13 +395,34 @@ describe('generateRound', () => {
     }
   });
 
-  it.each(MODES)('%s：一回合 5 題，題目不重複', (mode) => {
+  it.each(MODES)('%s：一回合 5 題，題目不重複，每種題型都出現', (mode) => {
     for (const level of LEVELS) {
       for (let seed = 1; seed <= 100; seed++) {
         const round = generateRound(level, createRng(seed), { mode });
         expect(round).toHaveLength(5);
         expect(new Set(round.map((q) => q.key)).size).toBe(5);
-        if (mode === 'easy') expect(new Set(round.map((q) => q.type))).toEqual(new Set(['next', 'fill']));
+        expect(new Set(round.map((q) => q.type))).toEqual(new Set(typesFor(level, mode)));
+      }
+    }
+  });
+
+  it('混合模式：簡單版有選擇題、補空格、找錯誤、排一排；困難、天才版沒有選擇題', () => {
+    const level = LEVELS[0]!;
+    expect(new Set(typesFor(level, 'easy'))).toEqual(new Set(['next', 'fill', 'error', 'order']));
+    expect(new Set(typesFor(level, 'hard'))).toEqual(new Set(['fill', 'error', 'order']));
+    expect(new Set(typesFor(level, 'genius'))).toEqual(new Set(['fill', 'error', 'order']));
+  });
+
+  it.each(PRACTICES.filter((p) => p !== 'mix'))('只練「%s」：一回合只出這種題型', (practice) => {
+    const allowed = practice === 'fill' ? ['next', 'fill'] : [practice];
+    for (const level of LEVELS) {
+      for (const mode of MODES) {
+        for (let seed = 1; seed <= 30; seed++) {
+          const round = generateRound(level, createRng(seed), { mode, practice });
+          expect(round).toHaveLength(5);
+          for (const q of round) expect(allowed, `${level.id} ${mode}`).toContain(q.type);
+          expect(new Set(round.map((q) => q.key)).size).toBe(5);
+        }
       }
     }
   });

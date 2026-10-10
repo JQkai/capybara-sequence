@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { LEVELS, MODES, MODE_NAMES, describeGenius, starsKey, type Level } from '@kidstudy/game-core';
+import { LEVELS, MODES, MODE_NAMES, PRACTICES, PRACTICE_NAMES, describeGenius, starsKey, type Level } from '@kidstudy/game-core';
 import Capybara from './Capybara.vue';
 import StarRow from './StarRow.vue';
 import { progress, settings, type TermKey } from '../store';
@@ -125,6 +125,22 @@ const termStars = computed(() => stops.value.reduce((sum, s) => sum + s.stars, 0
     </button>
   </div>
   <p class="mode-help">{{ modeHelp }}</p>
+
+  <div class="practices" role="radiogroup" aria-label="選擇題型">
+    <span class="practices-label">題型</span>
+    <button
+      v-for="practice in PRACTICES"
+      :key="practice"
+      type="button"
+      role="radio"
+      class="practice"
+      :aria-checked="settings.practice === practice"
+      @click="settings.practice = practice"
+    >
+      {{ PRACTICE_NAMES[practice] }}
+    </button>
+  </div>
+  <p v-if="settings.practice !== 'mix'" class="mode-help">只練一種題型時，星星不會記到地圖上</p>
 
   <p class="summary">
     {{ termLabel }}・{{ MODE_NAMES[settings.mode] }}版・已經拿到
@@ -278,6 +294,39 @@ h1 {
   border-color: var(--genius);
   background: var(--genius);
   color: #fff;
+}
+
+.practices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.practices-label {
+  margin-right: 4px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.practice {
+  min-height: 36px;
+  padding: 2px 12px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.practice[aria-checked='true'] {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-dark);
 }
 
 .mode-help {

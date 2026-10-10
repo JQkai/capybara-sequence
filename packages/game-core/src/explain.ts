@@ -48,6 +48,8 @@ export function reasonFor(question: Question, position: number, to: number | str
 
 export function explain(question: Question): Explanation {
   const { blanks, answers, step, timesOf } = question;
+  // 排一排：每個位置都是孩子放的，說明規律就夠了
+  if (question.type === 'order') return { rule: describeRule(step), reasons: [], times: [] };
   // 兩邊都看不到數的空格，要等旁邊的空格算出來才能推，所以先說明旁邊有數的空格
   const order = [...blanks.keys()].sort(
     (a, b) =>

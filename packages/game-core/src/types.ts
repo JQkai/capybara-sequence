@@ -1,5 +1,12 @@
-/** 題型：next＝選出下一個數（選擇題）；fill＝補空格（用數字鍵盤輸入） */
-export type QuestionType = 'next' | 'fill';
+/**
+ * 題型：
+ * next＝選出下一個數（選擇題）；fill＝補空格（用數字鍵盤輸入）；
+ * error＝找出寫錯的那個數；order＝把打亂的數字卡排成數列
+ */
+export type QuestionType = 'next' | 'fill' | 'error' | 'order';
+
+/** 練習哪種題型：mix＝每回合混合所有題型；其他只出那一種（fill 包含選擇題和補空格） */
+export type Practice = 'mix' | 'fill' | 'error' | 'order';
 
 /**
  * 難度：
@@ -65,10 +72,18 @@ export interface Question {
   type: QuestionType;
   /** 完整數列（含答案） */
   terms: number[];
-  /** 空格位置，由小到大；簡單版只有一個 */
+  /**
+   * 要作答的位置，由小到大：
+   * next、fill 是空格（簡單版一個，困難、天才版 2～3 個）；
+   * error 是寫錯的那個位置；order 是全部位置（每顆石頭都要放數字卡）
+   */
   blanks: number[];
-  /** 每個空格的答案，順序和 blanks 相同 */
+  /** 每個作答位置的正確答案，順序和 blanks 相同 */
   answers: number[];
+  /** 找錯誤題：寫錯的那個數（顯示在 blanks[0] 的位置） */
+  wrong?: number;
+  /** 排一排題：打亂順序的數字卡 */
+  cards?: number[];
   step: number;
   /** 乘法數列的段次，例如 4 的乘法是 4；不是乘法數列時沒有這個欄位 */
   timesOf?: number;

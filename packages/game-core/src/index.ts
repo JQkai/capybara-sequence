@@ -1,8 +1,12 @@
-export type { Level, Mode, Question, QuestionType, StepRule } from './types';
+export type { Level, Mode, Practice, Question, QuestionType, StepRule } from './types';
 export { createRng, type Rng } from './rng';
 export { LEVELS, getLevel } from './levels';
 export {
   BLANK_COUNTS,
+  PRACTICES,
+  PRACTICE_NAMES,
+  shownTerms,
+  typesFor,
   describeGenius,
   geniusTwists,
   generateQuestion,

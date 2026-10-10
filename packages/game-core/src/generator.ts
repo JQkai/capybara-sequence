@@ -1,5 +1,5 @@
 import { pick, randomInt, shuffle, type Rng } from './rng';
-import type { Level, Mode, Question, QuestionType, StepRule } from './types';
+import type { Level, Mode, Practice, Question, QuestionType, StepRule } from './types';
 
 /** 列出所有合法的第一個數，讓整個數列都落在規則範圍內並符合限制 */
 export function startCandidates(rule: StepRule, length: number): number[] {
@@ -91,9 +91,12 @@ export interface ModeSettings {
   types: QuestionType[];
 }
 
+/** 每一關都有的新題型（M3）：找錯誤、排一排 */
+const EXTRA_TYPES: QuestionType[] = ['error', 'order'];
+
 /** 某個關卡在某個難度下的出題設定 */
 export function settingsFor(level: Level, mode: Mode): ModeSettings {
-  if (mode === 'easy') return { rules: level.rules, length: level.length, types: level.types };
+  if (mode === 'easy') return { rules: level.rules, length: level.length, types: [...level.types, ...EXTRA_TYPES] };
   const hardRules = level.hard?.rules ?? level.rules;
   const length =
     level.hard?.length ??
@@ -101,8 +104,20 @@ export function settingsFor(level: Level, mode: Mode): ModeSettings {
     HARD_LENGTHS.at(-1)!;
   const rules =
     mode === 'hard' ? hardRules : uniqueRules(hardRules.flatMap((rule) => geniusRules(level, rule, length)));
-  // 多個空格的選擇題不好操作，困難、天才版只出補空格
-  return { rules, length, types: ['fill'] };
+  // 多個空格的選擇題不好操作，困難、天才版不出選擇題
+  return { rules, length, types: ['fill', ...EXTRA_TYPES] };
+}
+
+export const PRACTICES: Practice[] = ['mix', 'fill', 'error', 'order'];
+
+export const PRACTICE_NAMES: Record<Practice, string> = { mix: '混合', fill: '填空格', error: '找錯誤', order: '排一排' };
+
+/** 練習某種題型時，這個難度會出哪些題型（填空格包含選擇題和補空格） */
+export function typesFor(level: Level, mode: Mode, practice: Practice = 'mix'): QuestionType[] {
+  const { types } = settingsFor(level, mode);
+  if (practice === 'mix') return types;
+  if (practice === 'fill') return types.filter((t) => t === 'next' || t === 'fill');
+  return types.filter((t) => t === practice);
 }
 
 export interface GeniusTwists {
@@ -221,6 +236,40 @@ function pickBlanks(rng: Rng, length: number, mode: 'hard' | 'genius'): number[]
   }
 }
 
+/**
+ * 找錯誤題的錯數：模仿孩子常見的錯，差 1、差 2、十位寫錯。
+ * 不能和數列裡其他的數一樣，也不能超出關卡範圍。
+ * 只錯一個數時，其他數都符合規律，所以只有改這一個數才能讓整列符合規律，答案唯一。
+ */
+function makeWrong(rng: Rng, terms: number[], index: number, step: number, range: { min: number; max: number }): number {
+  const correct = terms[index]!;
+  const plausible = shuffle(rng, [
+    correct + 1,
+    correct - 1,
+    Math.abs(step) > 2 ? correct + 2 : undefined,
+    Math.abs(step) > 2 ? correct - 2 : undefined,
+    Math.abs(step) < 10 ? correct + 10 : undefined,
+    Math.abs(step) < 10 ? correct - 10 : undefined,
+  ]);
+  const fallback: number[] = [];
+  for (let k = 3; k <= range.max; k++) fallback.push(correct + k, correct - k);
+  for (const candidate of [...plausible, ...fallback]) {
+    if (candidate === undefined || candidate === correct) continue;
+    if (candidate < Math.max(0, range.min) || candidate > range.max) continue;
+    if (terms.includes(candidate)) continue;
+    return candidate;
+  }
+  throw new Error(`找不到合適的錯數：${terms.join(',')} 第 ${index} 個`);
+}
+
+/** 把數字卡打亂，而且不能剛好是排好的順序 */
+function shuffleCards(rng: Rng, terms: number[]): number[] {
+  for (;;) {
+    const cards = shuffle(rng, terms);
+    if (cards.some((c, i) => c !== terms[i])) return cards;
+  }
+}
+
 export interface QuestionOptions {
   type?: QuestionType;
   mode?: Mode;
@@ -236,54 +285,73 @@ export function generateQuestion(level: Level, rng: Rng, options: QuestionOption
 
   let blanks: number[];
   if (type === 'next') blanks = [settings.length - 1];
+  else if (type === 'order') blanks = terms.map((_, i) => i);
+  else if (type === 'error') blanks = [randomInt(rng, 0, settings.length - 1)];
   else if (mode === 'easy') blanks = [randomInt(rng, level.blankFirst ? 0 : 1, settings.length - 1)];
   else blanks = pickBlanks(rng, settings.length, mode);
 
   const answers = blanks.map((i) => terms[i]!);
   const choices = type === 'next' ? makeChoices(level, terms, answers[0]!, rule.step, rng) : [];
+  const wrong = type === 'error' ? makeWrong(rng, terms, blanks[0]!, rule.step, levelRange(level, mode)) : undefined;
+  const cards = type === 'order' ? shuffleCards(rng, terms) : undefined;
 
   return {
-    key: `${mode}:${type}:${terms.join(',')}:${blanks.join('|')}`,
+    key: `${mode}:${type}:${terms.join(',')}:${blanks.join('|')}:${wrong ?? ''}:${cards?.join(',') ?? ''}`,
     levelId: level.id,
     mode,
     type,
     terms,
     blanks,
     answers,
+    ...(wrong !== undefined ? { wrong } : {}),
+    ...(cards ? { cards } : {}),
     step: rule.step,
     ...(rule.times ? { timesOf: Math.abs(rule.step) } : {}),
     choices,
   };
 }
 
+/** 找錯誤題畫面上顯示的數列：寫錯的位置換成錯數；其他題型就是完整數列 */
+export function shownTerms(question: Question): number[] {
+  if (question.type !== 'error' || question.wrong === undefined) return question.terms;
+  const shown = [...question.terms];
+  shown[question.blanks[0]!] = question.wrong;
+  return shown;
+}
+
 /**
  * 題目難度排序，數字越大越難：
- * 選擇題 < 一個空格（最後 < 中間 < 第一個）< 兩個空格 < 三個空格；空格在開頭的再難一點
+ * 選擇題 < 排一排 < 找錯誤 < 一個空格（最後 < 中間 < 第一個）< 兩個空格 < 三個空格；空格在開頭的再難一點
  */
 export function questionRank(question: Question): number {
   const { type, blanks, terms } = question;
   if (type === 'next') return 0;
+  if (type === 'order') return 1;
+  if (type === 'error') return 2;
   if (blanks.length === 1) {
     const blank = blanks[0]!;
-    if (blank === terms.length - 1) return 1;
-    return blank > 0 ? 2 : 3;
+    if (blank === terms.length - 1) return 3;
+    return blank > 0 ? 4 : 5;
   }
-  return 4 + (blanks.length - 2) * 2 + (blanks.includes(0) ? 1 : 0);
+  return 6 + (blanks.length - 2) * 2 + (blanks.includes(0) ? 1 : 0);
 }
 
 export interface RoundOptions {
   count?: number;
   mode?: Mode;
+  practice?: Practice;
 }
 
-/** 產生一回合的題目：各題型都會出現、同一回合不重複，並且由易到難排列 */
+/** 產生一回合的題目：每種題型至少出現一次（題數夠的話）、同一回合不重複，並且由易到難排列 */
 export function generateRound(level: Level, rng: Rng, options: RoundOptions = {}): Question[] {
-  const { count = 5, mode = 'easy' } = options;
-  const { types } = settingsFor(level, mode);
+  const { count = 5, mode = 'easy', practice = 'mix' } = options;
+  const available = typesFor(level, mode, practice);
+  // 先讓每種題型各出一題，剩下的題數隨機挑題型
+  const types = shuffle(rng, available).slice(0, count);
+  while (types.length < count) types.push(pick(rng, available));
   const questions: Question[] = [];
   const seen = new Set<string>();
-  for (let i = 0; i < count; i++) {
-    const type = types[i % types.length]!;
+  for (const type of types) {
     let question = generateQuestion(level, rng, { type, mode });
     for (let tries = 0; seen.has(question.key) && tries < 50; tries++) {
       question = generateQuestion(level, rng, { type, mode });

@@ -41,7 +41,9 @@ describe('hintFor', () => {
     for (const level of LEVELS) {
       for (const mode of MODES) {
         for (let seed = 1; seed <= 200; seed++) {
-          const q = generateQuestion(level, createRng(seed), { mode });
+          const q = generateQuestion(level, createRng(seed), { mode, type: seed % 2 ? 'fill' : undefined });
+          // 排一排的數字卡都看得到，找錯誤另外測試
+          if (q.type === 'order' || q.type === 'error') continue;
           // 引導句裡出現的數只能是看得到的數或差（答案剛好等於差的情況除外）
           const allowed = new Set([...q.terms.filter((_, i) => !q.blanks.includes(i)), Math.abs(q.step)]);
           for (const focus of q.blanks) {
@@ -57,6 +59,44 @@ describe('hintFor', () => {
         }
       }
     }
+  });
+});
+
+describe('找錯誤、排一排的提示', () => {
+  it('找錯誤：第 1 層每兩顆之間都標出實際的差，寫錯的數兩旁的差和規律不同', () => {
+    // 2、4、6、9、10：9 應該是 8
+    const q = question([2, 4, 6, 8, 10], 3, { type: 'error', wrong: 9 });
+    const hint = hintFor(q);
+    expect(hint.gaps.map((g) => g.label)).toEqual(['+2', '+2', '+3', '+1']);
+    expect(hint.intro).toBe('看看石頭下面的數字，哪兩顆差得不一樣？');
+    expect(hint.guide).toBe('2 和 4 差 2，每兩顆都應該差 2，哪一顆不是？');
+  });
+
+  it('找錯誤：所有題目的引導句只用沒寫錯的數，不會透露答案', () => {
+    for (const level of LEVELS) {
+      for (const mode of MODES) {
+        for (let seed = 1; seed <= 200; seed++) {
+          const q = generateQuestion(level, createRng(seed), { mode, type: 'error' });
+          const hint = hintFor(q);
+          expect(hint.gaps).toHaveLength(q.terms.length - 1);
+          const correctShown = q.terms.filter((_, i) => i !== q.blanks[0]);
+          const numbers = (hint.guide.match(/\d+/g) ?? []).map(Number);
+          for (const n of numbers) {
+            expect(correctShown.includes(n) || n === Math.abs(q.step), `${hint.guide}（${q.key}）`).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
+  it('排一排：先找最小（往回數就找最大）的數', () => {
+    const up = question([5, 10, 15, 20, 25], [0, 1, 2, 3, 4], { type: 'order', cards: [15, 5, 25, 10, 20] });
+    expect(hintFor(up).intro).toBe('最小的數放第一顆，再從剩下的卡裡找最小的，一顆一顆排');
+    expect(hintFor(up).guide).toBe('第一顆是 5，5 再多 5 是多少？');
+    expect(hintFor(up).gaps).toEqual([]);
+    const down = question([50, 40, 30, 20, 10], [0, 1, 2, 3, 4], { type: 'order', cards: [30, 10, 50, 20, 40] });
+    expect(hintFor(down).intro).toBe('最大的數放第一顆，再從剩下的卡裡找最大的，一顆一顆排');
+    expect(hintFor(down).guide).toBe('第一顆是 50，比 50 少 10 是多少？');
   });
 });
 

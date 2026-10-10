@@ -4,27 +4,29 @@ import type { Gap } from '@kidstudy/game-core';
 import Capybara from './Capybara.vue';
 
 /**
- * 空格的狀態：
- * answering＝還沒填；active＝正在填；retry＝答錯、要再試；correct＝答對；
- * wrong＝答錯（顯示孩子填的數）；reveal＝最後答錯，顯示正確答案
+ * 每顆石頭的樣子：
+ * number＝題目給的數；answering＝空格、還沒填；active＝正在填；retry＝答錯、要再試；
+ * correct＝答對；wrong＝答錯（顯示孩子填的數）；reveal＝最後答錯，顯示正確答案；
+ * crossed＝找錯誤時點錯的石頭
  */
-export type BlankStatus = 'answering' | 'active' | 'retry' | 'correct' | 'wrong' | 'reveal';
+export type CellStyle = 'number' | 'answering' | 'active' | 'retry' | 'correct' | 'wrong' | 'reveal' | 'crossed';
+
+export interface Cell {
+  text: string;
+  style: CellStyle;
+  /** 可以點：選要填的空格、找錯誤時點石頭、排一排時拿回數字卡 */
+  selectable?: boolean;
+}
 
 const props = withDefaults(
   defineProps<{
-    terms: number[];
-    blanks: number[];
-    /** 每個空格顯示的內容，key 是空格位置 */
-    blankTexts: Record<number, string>;
-    blankStatus: Record<number, BlankStatus>;
-    /** 卡皮巴拉站在哪一格 */
+    cells: Cell[];
+    /** 卡皮巴拉站在哪一顆；-1 不顯示 */
     mascotAt: number;
     /** 第 1 層提示：標在相鄰兩個數之間的差，例如「+5」 */
     gaps?: Gap[];
-    /** 可以點空格選擇要填哪一格（多個空格時） */
-    selectable?: boolean;
   }>(),
-  { gaps: () => [], selectable: false },
+  { gaps: () => [] },
 );
 
 const emit = defineEmits<{ select: [position: number] }>();
@@ -32,50 +34,42 @@ const emit = defineEmits<{ select: [position: number] }>();
 const gapAt = computed(() => new Map(props.gaps.map((g) => [g.index, g.label])));
 
 /** 手機上超過 5 個數就排成兩排，每排一半 */
-const half = computed(() => Math.ceil(props.terms.length / 2));
+const half = computed(() => Math.ceil(props.cells.length / 2));
 
 /** 字的大小依最長的數決定，整排一致 */
 const fontScale = computed(() => {
-  const digits = Math.max(...props.terms.map((t) => String(t).length));
+  const digits = Math.max(...props.cells.map((c) => c.text.length));
   return digits <= 2 ? 0.42 : digits === 3 ? 0.34 : 0.27;
 });
 
-function isBlank(i: number) {
-  return props.blanks.includes(i);
-}
-
-function canSelect(i: number) {
-  return props.selectable && isBlank(i) && ['answering', 'active', 'retry'].includes(props.blankStatus[i] ?? '');
-}
-
-function label(i: number): string {
-  if (!isBlank(i)) return String(props.terms[i]);
-  const text = props.blankTexts[i] ?? '?';
-  return `空格：${text === '?' ? '還沒填' : text}`;
+function label(cell: Cell): string {
+  if (cell.style === 'number') return cell.text;
+  if (cell.style === 'crossed') return `${cell.text}（點過了，不是這一顆）`;
+  return `空格：${cell.text === '?' ? '還沒填' : cell.text}`;
 }
 </script>
 
 <template>
   <ol
     class="row"
-    :class="{ long: terms.length > 5 }"
-    :style="{ '--n': terms.length, '--half': half, '--fs': fontScale }"
+    :class="{ long: cells.length > 5 }"
+    :style="{ '--n': cells.length, '--half': half, '--fs': fontScale }"
     aria-label="數列"
   >
     <li
-      v-for="(term, i) in terms"
+      v-for="(cell, i) in cells"
       :key="i"
       class="pad"
-      :class="isBlank(i) ? ['blank', blankStatus[i] ?? 'answering', { selectable: canSelect(i) }] : []"
-      :role="canSelect(i) ? 'button' : undefined"
-      :tabindex="canSelect(i) ? 0 : undefined"
-      :aria-label="label(i)"
-      :aria-pressed="canSelect(i) ? blankStatus[i] === 'active' : undefined"
-      @click="canSelect(i) && emit('select', i)"
-      @keydown.enter.space.prevent="canSelect(i) && emit('select', i)"
+      :class="[cell.style === 'number' ? '' : 'blank', cell.style, { selectable: cell.selectable }]"
+      :role="cell.selectable ? 'button' : undefined"
+      :tabindex="cell.selectable ? 0 : undefined"
+      :aria-label="label(cell)"
+      :aria-pressed="cell.selectable && cell.style !== 'number' ? cell.style === 'active' : undefined"
+      @click="cell.selectable && emit('select', i)"
+      @keydown.enter.space.prevent="cell.selectable && emit('select', i)"
     >
       <Capybara v-if="i === mascotAt" :size="46" class="mascot" />
-      <span class="num">{{ isBlank(i) ? (blankTexts[i] ?? '?') : term }}</span>
+      <span class="num">{{ cell.text }}</span>
       <span
         v-if="gapAt.has(i)"
         class="gap"
@@ -143,8 +137,34 @@ function label(i: number): string {
   box-shadow: none;
 }
 
-.blank.selectable {
+.selectable {
   cursor: pointer;
+}
+
+/* 找錯誤：題目給的數也可以點 */
+.number.selectable:hover {
+  border-color: var(--accent);
+}
+
+.number.selectable:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--stone-edge);
+}
+
+/* 找錯誤時點錯的石頭 */
+.blank.crossed {
+  background: var(--stone);
+  border: 3px dashed var(--stone-edge);
+  box-shadow: none;
+  color: var(--text-soft);
+  text-decoration: line-through;
+  text-decoration-thickness: 3px;
+  animation: shake 0.35s;
+}
+
+/* 只讓數字變淡；不能整顆石頭變淡，否則石頭下方的「+5」提示也會跟著變淡 */
+.blank.crossed .num {
+  opacity: 0.6;
 }
 
 .blank.active {

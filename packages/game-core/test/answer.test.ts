@@ -70,6 +70,16 @@ describe('explain', () => {
     });
   });
 
+  it('找錯誤：從沒寫錯的鄰居推出正確的數', () => {
+    const q = question([2, 4, 6, 8, 10], 3, { type: 'error', wrong: 9 });
+    expect(explain(q).reasons).toEqual(['6 再多 2 是 8']);
+  });
+
+  it('排一排：只說明規律', () => {
+    const q = question([5, 10, 15], [0, 1, 2], { type: 'order', cards: [10, 15, 5] });
+    expect(explain(q)).toEqual({ rule: '每次多 5', reasons: [], times: [] });
+  });
+
   it('describeRule', () => {
     expect(describeRule(100)).toBe('每次多 100');
     expect(describeRule(-10)).toBe('每次少 10');
@@ -89,6 +99,20 @@ describe('isUniquelyDetermined', () => {
     const q = question([2, 4, 6, 8, 10], 4);
     expect(isUniquelyDetermined({ ...q, terms: [2, 4, 7, 8, 10] })).toBe(false);
     expect(isUniquelyDetermined({ ...q, answers: [12] })).toBe(false);
+  });
+
+  it('找錯誤：錯數不能等於正確答案或其他數', () => {
+    const base = question([2, 4, 6, 8, 10], 3, { type: 'error', wrong: 9 });
+    expect(isUniquelyDetermined(base)).toBe(true);
+    expect(isUniquelyDetermined({ ...base, wrong: 8 })).toBe(false);
+    expect(isUniquelyDetermined({ ...base, wrong: 6 })).toBe(false);
+  });
+
+  it('排一排：數字卡要剛好是整個數列', () => {
+    const base = question([5, 10, 15, 20], [0, 1, 2, 3], { type: 'order', cards: [15, 5, 20, 10] });
+    expect(isUniquelyDetermined(base)).toBe(true);
+    expect(isUniquelyDetermined({ ...base, cards: [15, 5, 20, 11] })).toBe(false);
+    expect(isUniquelyDetermined({ ...base, cards: [15, 5, 20] })).toBe(false);
   });
 
   it('多個空格：看得到的數少於 3 個就不唯一', () => {

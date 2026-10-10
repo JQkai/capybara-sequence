@@ -1,5 +1,5 @@
 import { reactive, watch } from 'vue';
-import { starsKey, type Mode } from '@kidstudy/game-core';
+import { starsKey, type Mode, type Practice } from '@kidstudy/game-core';
 
 /**
  * 存在瀏覽器的資料：進度（每關最好拿過幾顆星）和設定。
@@ -39,6 +39,8 @@ export const settings = reactive(
     term: '1-1' as TermKey,
     /** 地圖上目前選的難度 */
     mode: 'easy' as Mode,
+    /** 練習哪種題型；mix＝每回合混合所有題型 */
+    practice: 'mix' as Practice,
   }),
 );
 persist('capybara-sequence:settings:v1', settings);

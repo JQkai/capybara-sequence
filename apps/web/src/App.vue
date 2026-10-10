@@ -18,9 +18,10 @@ function play(level: Level, mode: Mode) {
   <main class="app">
     <PlayRound
       v-if="current"
-      :key="`${current.level.id}@${current.mode}`"
+      :key="`${current.level.id}@${current.mode}@${settings.practice}`"
       :level="current.level"
       :mode="current.mode"
+      :practice="settings.practice"
       @exit="current = null"
       @play="play"
     />
